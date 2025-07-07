@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>动态股票热力图</title>
-    <!-- 链接到我们的CSS样式文件 -->
+    <title>动态股票热力图 (安全实时版)</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <header class="header">
-        <h1>股票热力图 (动态版)</h1>
-        <div class="data-source">数据源: 标普500指数 (模拟API)</div>
+        <h1>股票热力图 (安全实时版)</h1>
+        <div class="data-source">数据源: Finnhub API (Vercel代理)</div>
     </header>
 
-    <!-- 这是动态内容的核心挂载点 -->
     <main id="heatmap-container" class="heatmap-container">
-        <!-- 初始时显示加载状态 -->
-        <div id="loading-indicator" class="loading-indicator">数据加载中，请稍候...</div>
+        <div id="loading-indicator" class="loading-indicator">
+            <div class="spinner"></div>
+            <p>正在连接服务器，获取实时数据...</p>
+        </div>
     </main>
 
     <footer class="legend">
@@ -29,7 +29,6 @@
         <div class="legend-item"><span>涨幅</span></div>
     </footer>
     
-    <!-- 在body结束前链接到我们的JavaScript脚本文件 -->
     <script src="script.js"></script>
 </body>
 </html>
