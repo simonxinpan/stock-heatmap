@@ -1,8 +1,6 @@
-// /api/stocks.js - Vercel Serverless Function
+// /api/stocks.js - Vercel Serverless Function (Diagnostic Version)
 
-// 这是一个在服务器端运行的函数，它接收请求，然后去调用Finnhub
 export default async function handler(request, response) {
-    // 从Vercel的环境变量中安全地获取API密钥
     const apiKey = process.env.FINNHUB_API_KEY;
 
     if (!apiKey) {
@@ -10,60 +8,66 @@ export default async function handler(request, response) {
     }
 
     const finnhubBaseUrl = 'https://finnhub.io/api/v1';
-    const stockCount = 60; // 定义获取股票的数量
 
     try {
-        // --- 封装一个安全的Finnhub fetch函数 ---
         const fetchFromFinnhub = async (endpoint) => {
             const url = `${finnhubBaseUrl}${endpoint}&token=${apiKey}`;
             const apiResponse = await fetch(url);
             if (!apiResponse.ok) {
-                // 如果API返回错误，直接抛出异常
+                // 将Finnhub返回的原始错误信息传递出去，方便调试
+                const errorBody = await apiResponse.text();
+                console.error("Finnhub API Error:", errorBody);
                 throw new Error(`Finnhub API error: ${apiResponse.statusText}`);
             }
             return await apiResponse.json();
         };
 
-        // 1. 获取标普500成分股
-        const constituentsData = await fetchFromFinnhub('/index/constituents?symbol=^GSPC');
-        if (!constituentsData || !constituentsData.constituents) {
-            throw new Error('Could not fetch S&P 500 constituents.');
-        }
-        const tickers = constituentsData.constituents.slice(0, stockCount);
+        // ======================= 诊断性修改 =======================
+        // 我们不再调用 /index/constituents
+        // 而是直接使用一个硬编码的股票列表来测试
+        console.log("Using hardcoded ticker list for diagnostics...");
+        const tickers = [
+            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 
+            'TSLA', 'META', 'JPM', 'V', 'JNJ'
+        ];
+        // ======================= 修改结束 =======================
 
-        // 2. 并发获取所有股票的详细数据
         const stockPromises = tickers.map(async (ticker) => {
             try {
+                // 我们仍然尝试获取profile和quote，因为这通常是免费的
                 const [profile, quote] = await Promise.all([
                     fetchFromFinnhub(`/stock/profile2?symbol=${ticker}`),
                     fetchFromFinnhub(`/quote?symbol=${ticker}`)
                 ]);
 
                 if (!profile || !quote || !profile.marketCapitalization) {
-                    return null; // 如果数据不完整，则跳过此股票
+                    return null;
                 }
 
-                // 3. 组装成前端需要的数据格式
                 return {
                     ticker: profile.ticker,
-                    name_zh: profile.name.split(' ')[0], // 尝试取公司名的第一个单词作为简称
+                    name_zh: profile.name.split(' ')[0],
                     sector: profile.finnhubIndustry,
                     market_cap: profile.marketCapitalization,
                     change_percent: quote.dp,
                 };
             } catch (error) {
-                console.error(`Error fetching data for ${ticker}:`, error);
-                return null; // 单个股票获取失败不影响其他股票
+                console.error(`Error fetching diagnostic data for ${ticker}:`, error);
+                return null;
             }
         });
 
-        const allStockData = (await Promise.all(stockPromises)).filter(Boolean); // 过滤掉所有null的结果
+        const allStockData = (await Promise.all(stockPromises)).filter(Boolean);
 
-        // 4. 将成功获取的数据返回给前端
+        if (allStockData.length === 0) {
+            // 如果所有股票都获取失败，说明可能是密钥真的有问题
+            throw new Error("Failed to fetch data for all test tickers. Please double check your API Key.");
+        }
+
         response.status(200).json(allStockData);
 
     } catch (error) {
-        console.error('Server-side error in /api/stocks:', error);
+        console.error('Server-side error in /api/stocks (diagnostic):', error);
         response.status(500).json({ error: error.message || 'An internal server error occurred.' });
     }
 }
