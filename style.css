@@ -61,17 +61,29 @@ body {
     flex: var(--sector-weight, 1) 1 200px;
     transition: all 0.5s ease-in-out;
 }
-.sector-title {
-    font-size: 14px;
-    font-weight: bold;
+
+/* --- 可点击的板块标题 --- */
+.sector-title-link {
+    text-decoration: none;
+    color: var(--text-white-color);
+    display: block;
     padding: 8px;
     background-color: rgba(42, 46, 57, 0.8);
     border-bottom: 1px solid var(--border-color);
-    color: var(--text-white-color);
+    transition: background-color 0.2s ease;
+}
+.sector-title-link:hover {
+    background-color: #363a45;
+}
+.sector-title {
+    font-size: 14px;
+    font-weight: bold;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    margin: 0;
 }
+
 
 /* --- 股票容器 --- */
 .stock-container {
@@ -110,10 +122,20 @@ body {
     color: var(--text-white-color);
     transition: background-color 0.5s ease-in-out;
     overflow: hidden;
+    text-align: center;
 }
 .stock-ticker { font-size: 14px; font-weight: bold; }
-.stock-name-zh { font-size: 11px; color: #b2b5be; opacity: 0.9; margin-top: 2px; }
-.stock-change { font-size: 12px; margin-top: 2px; }
+
+/* === 样式更新：让中文名更清晰醒目 === */
+.stock-name-zh {
+    font-size: 12px;
+    font-weight: 600; /* 加粗 */
+    color: var(--text-primary-color); /* 变亮 */
+    opacity: 0.9;
+    margin-top: 3px;
+}
+
+.stock-change { font-size: 12px; margin-top: 3px; }
 
 /* --- 颜色定义 --- */
 .gain-strong { background-color: #00b050; } /* 大涨 */
@@ -125,6 +147,6 @@ body {
 .flat { background-color: #434651; }       /* 平盘 */
 
 /* --- 底部图例 --- */
-.legend { display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 20px; padding: 10px; background-color: var(--container-bg-color); border-radius: 6px; }
+.legend { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 15px; margin-top: 20px; padding: 10px; background-color: var(--container-bg-color); border-radius: 6px; }
 .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; }
 .legend-color-box { width: 15px; height: 15px; border-radius: 3px; }
