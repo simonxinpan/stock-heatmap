@@ -1,4 +1,4 @@
-/* --- 基础和全局样式 --- */
+/* --- 全局与基础样式 --- */
 :root {
     --background-color: #131722;
     --container-bg-color: #1e222d;
@@ -6,6 +6,9 @@
     --text-primary-color: #d1d4dc;
     --text-secondary-color: #b2b5be;
     --text-white-color: #ffffff;
+    --gain-color: #00b050;
+    --loss-color: #ff0000;
+    --primary-blue: #2962ff;
 }
 
 body {
@@ -13,142 +16,61 @@ body {
     background-color: var(--background-color);
     color: var(--text-primary-color);
     margin: 0;
+}
+
+#app-container {
     padding: 20px;
     display: flex;
     flex-direction: column;
     min-height: calc(100vh - 40px);
 }
 
-/* --- 页面头部 --- */
-.header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-bottom: 15px;
-    border-bottom: 1px solid var(--border-color);
-    margin-bottom: 15px;
-}
+/* --- 公用头部 --- */
+.header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 15px; border-bottom: 1px solid var(--border-color); margin-bottom: 15px; }
 .header h1 { font-size: 24px; margin: 0; color: var(--text-white-color); }
-.data-source { font-size: 16px; background-color: #2a2e39; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); }
+.header .data-source { font-size: 16px; background-color: #2a2e39; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); }
 
-/* --- 热力图网格布局 --- */
-.heatmap-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    width: 100%;
-    flex-grow: 1; /* 占据剩余空间 */
-}
+/* --- 加载状态 --- */
+.loading-indicator { width: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 20px; padding: 50px; color: var(--text-secondary-color); flex-grow: 1;}
+.spinner { border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid var(--text-white-color); width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-/* --- 加载提示 --- */
-.loading-indicator {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    font-size: 20px;
-    padding: 50px;
-    color: var(--text-secondary-color);
-}
-.spinner {
-    border: 4px solid rgba(255, 255, 255, 0.3);
-    border-radius: 50%;
-    border-top: 4px solid var(--text-white-color);
-    width: 40px;
-    height: 40px;
-    animation: spin 1s linear infinite;
-    margin-bottom: 20px;
-}
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* --- 板块容器 --- */
-.sector {
-    display: flex;
-    flex-direction: column;
-    border: 1px solid var(--border-color);
-    background-color: var(--container-bg-color);
-    border-radius: 4px;
-    overflow: hidden;
-    flex: var(--sector-weight, 1) 1 200px;
-    transition: all 0.5s ease-in-out;
-}
-
-/* --- 可点击的板块标题 --- */
-.sector-title-link {
-    text-decoration: none;
-    color: var(--text-white-color);
-    display: block;
-    padding: 8px;
-    background-color: rgba(42, 46, 57, 0.8);
-    border-bottom: 1px solid var(--border-color);
-    transition: background-color 0.2s ease;
-}
+/* --- 热力图页面样式 --- */
+.heatmap-page-container { display: flex; flex-direction: column; flex-grow: 1; }
+.heatmap-container { display: flex; flex-wrap: wrap; gap: 10px; width: 100%; flex-grow: 1; }
+.sector { display: flex; flex-direction: column; border: 1px solid var(--border-color); background-color: var(--container-bg-color); border-radius: 4px; overflow: hidden; flex: var(--sector-weight, 1) 1 200px; transition: all 0.5s ease-in-out; }
+.sector-title-link { text-decoration: none; color: var(--text-white-color); display: block; padding: 8px; background-color: rgba(42, 46, 57, 0.8); border-bottom: 1px solid var(--border-color); transition: background-color 0.2s ease; }
 .sector-title-link:hover { background-color: #363a45; }
-.sector-title {
-    font-size: 14px;
-    font-weight: bold;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin: 0;
-}
-
-/* --- 股票容器 --- */
-.stock-container {
-    display: flex;
-    flex-wrap: wrap;
-    flex-grow: 1;
-    padding: 4px;
-    gap: 4px;
-}
-
-/* --- 单个股票方块 --- */
-.stock-link {
-    text-decoration: none;
-    display: flex;
-    flex-grow: var(--market-cap-weight, 1);
-    min-width: 40px;
-    min-height: 40px;
-    position: relative;
-    transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
-}
-.stock-link:hover {
-    transform: scale(1.05);
-    z-index: 10;
-    box-shadow: 0 0 15px rgba(0, 0, 0, 0.7);
-}
-.stock {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding: 5px;
-    border-radius: 3px;
-    color: var(--text-white-color);
-    transition: background-color 0.5s ease-in-out;
-    overflow: hidden;
-    text-align: center;
-}
+.sector-title { font-size: 14px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; }
+.stock-container { display: flex; flex-wrap: wrap; flex-grow: 1; padding: 4px; gap: 4px; }
+.stock-link { text-decoration: none; display: flex; flex-grow: var(--market-cap-weight, 1); min-width: 40px; min-height: 40px; position: relative; transition: transform 0.2s ease-out, box-shadow 0.2s ease-out; }
+.stock-link:hover { transform: scale(1.05); z-index: 10; box-shadow: 0 0 15px rgba(0, 0, 0, 0.7); }
+.stock { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 5px; border-radius: 3px; color: var(--text-white-color); transition: background-color 0.5s ease-in-out; overflow: hidden; text-align: center; }
 .stock-ticker { font-size: 14px; font-weight: bold; }
 .stock-name-zh { font-size: 12px; font-weight: 600; color: var(--text-primary-color); opacity: 0.9; margin-top: 3px; }
 .stock-change { font-size: 12px; margin-top: 3px; }
-
-/* --- 颜色定义 --- */
-.gain-strong { background-color: #00b050; }
-.gain-medium { background-color: #00873e; }
-.gain-weak { background-color: #00642e; }
-.loss-weak { background-color: #9c2a2a; }
-.loss-medium { background-color: #c71f1f; }
-.loss-strong { background-color: #ff0000; }
+.gain-strong { background-color: #00b050; } .gain-medium { background-color: #00873e; } .gain-weak { background-color: #00642e; }
+.loss-weak { background-color: #9c2a2a; } .loss-medium { background-color: #c71f1f; } .loss-strong { background-color: #ff0000; }
 .flat { background-color: #434651; }
-
-/* --- 底部图例 --- */
 .legend { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 15px; margin-top: 20px; padding: 10px; background-color: var(--container-bg-color); border-radius: 6px; }
 .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; }
 .legend-color-box { width: 15px; height: 15px; border-radius: 3px; }
+
+/* --- 个股详情页样式 --- */
+.stock-detail-page { display: flex; gap: 20px; max-width: 1400px; margin: auto; width: 100%;}
+.stock-detail-page .main-content { flex-grow: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.stock-detail-page .right-sidebar { flex-basis: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 20px; }
+.card { background-color: var(--container-bg-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 20px; }
+.card-title { font-size: 18px; font-weight: 600; color: var(--text-white-color); margin: 0 0 15px 0; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); }
+.stock-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 15px; border-bottom: 1px solid var(--border-color); flex-wrap: wrap; gap: 15px; }
+.stock-identity { display: flex; align-items: center; gap: 15px; }
+.stock-logo { width: 48px; height: 48px; border-radius: 50%; background-color: #fff; }
+.stock-name h1 { margin: 0; font-size: 28px; color: var(--text-white-color); }
+.stock-name p { margin: 0; font-size: 14px; color: var(--text-secondary-color); }
+.stock-price-info { text-align: right; }
+.current-price { font-size: 32px; font-weight: 700; color: var(--text-white-color); }
+.price-change.gain { color: var(--gain-color); } .price-change.loss { color: var(--loss-color); }
+.summary-item { display: flex; justify-content: space-between; font-size: 14px; padding: 8px 0; border-bottom: 1px solid #2a2e39; }
+.summary-item .label { color: var(--text-secondary-color); } .summary-item .value { font-weight: 500; color: var(--text-primary-color); }
+.chart-image { width: 100%; display: block; border-radius: 4px; background-color: var(--container-bg-color); border: 1px solid var(--border-color); }
+a.back-link { color: var(--primary-blue); text-decoration: none; margin-bottom: 15px; display: inline-block; }
