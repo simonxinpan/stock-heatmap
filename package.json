@@ -1,0 +1,8 @@
+{
+  "name": "stock-heatmap",
+  "version": "2.2.0",
+  "private": true,
+  "dependencies": {
+    "@upstash/redis": "^1.30.0"
+  }
+}
