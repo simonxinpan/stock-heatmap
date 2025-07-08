@@ -11,12 +11,12 @@ async function router() {
     if (page === 'stock' && symbol) {
         await renderStockDetailPage(symbol);
     } else {
+        document.title = '股票热力图'; // 恢复首页标题
         await renderHomePage();
     }
 }
 
 // --- 页面渲染模块 ---
-
 function showLoading() {
     appContainer.innerHTML = `<div class="loading-indicator"><div class="spinner"></div><p>数据加载中...</p></div>`;
 }
@@ -60,7 +60,6 @@ function generateTreemap(allStocks, container) {
     container.innerHTML = '';
     const { clientWidth: totalWidth, clientHeight: totalHeight } = container;
     if (totalWidth === 0 || totalHeight === 0) return;
-    const totalMarketCap = allStocks.reduce((sum, stock) => sum + stock.market_cap, 0);
 
     const stocksBySector = groupDataBySector(allStocks);
 
@@ -93,19 +92,25 @@ function generateTreemap(allStocks, container) {
             itemEl.appendChild(titleEl);
 
             const titleHeight = 28;
-            const contentWidth = width - 4;
-            const contentHeight = height - titleHeight - 2;
+            const contentWidth = width - 4; // 减去边框
+            const contentHeight = height - titleHeight - 2; // 减去标题和边框
 
             if (contentWidth > 0 && contentHeight > 0) {
-                layout(currentItem.items, 0, titleHeight, contentWidth, contentHeight, itemEl, false);
+                 // 递归调用，为子项创建布局
+                 layout(currentItem.items, 0, 0, contentWidth, contentHeight, itemEl, false);
             }
         } else {
-            let itemWidth = isHorizontal ? width * itemProportion : width;
-            let itemHeight = isHorizontal ? height : height * itemProportion;
-            itemEl = createStockElement(currentItem, itemWidth, itemHeight);
+            itemEl = createStockElement(currentItem, width * itemProportion, height);
+        }
+        
+        // 此处有一个小逻辑错误，父元素不应重复添加子元素，应由子级递归处理
+        if(isSectorLevel) {
+            parentEl.appendChild(itemEl);
+        } else {
+            // 在非板块层级，直接将股票方块添加到其父级（即板块）
+            parentEl.appendChild(itemEl);
         }
 
-        parentEl.appendChild(itemEl);
 
         let itemWidth, itemHeight;
         if (isHorizontal) {
@@ -133,6 +138,10 @@ function createStockElement(stock, width, height) {
     stockLink.className = 'treemap-stock';
     stockLink.href = `/?page=stock&symbol=${stock.ticker}`;
     stockLink.onclick = (e) => navigate(e, stockLink.href);
+    
+    // 把定位样式直接应用在 a 标签上
+    stockLink.style.width = `${width}px`;
+    stockLink.style.height = `${height}px`;
 
     const stockDiv = document.createElement('div');
     const change = parseFloat(stock.change_percent);
@@ -171,14 +180,19 @@ function groupDataBySector(data) {
         acc[sector].total_market_cap += stock.market_cap;
         return acc;
     }, {});
+    
+    for (const sector in grouped) {
+        grouped[sector].stocks.sort((a,b) => b.market_cap - a.market_cap);
+    }
+    
     return grouped;
 }
 
 function getColorClass(change) {
-    if (isNaN(change)) return 'flat';
+    if (isNaN(change) || (change > -0.2 && change < 0.2)) return 'flat';
     if (change > 2) return 'gain-strong';
     if (change > 1) return 'gain-medium';
-    if (change > 0.2) return 'gain-weak';
+    if (change >= 0.2) return 'gain-weak';
     if (change < -2) return 'loss-strong';
     if (change < -1) return 'loss-medium';
     if (change < -0.2) return 'loss-weak';
@@ -193,47 +207,88 @@ function navigate(event, path) {
 
 async function renderStockDetailPage(symbol) {
     try {
-        showLoading();
+        appContainer.innerHTML = `<div class="loading-indicator"><div class="spinner"></div><p>正在加载 ${symbol} 的详细数据...</p></div>`;
         const res = await fetch(`/api/stocks?ticker=${symbol}`);
         if (!res.ok) throw new Error('获取股票详情失败');
         const { profile, quote } = await res.json();
 
-        const change = quote.dp;
-        const changeAmount = quote.d;
+        // 数据准备
+        const change = quote.dp || 0;
+        const changeAmount = quote.d || 0;
         const changeClass = change >= 0 ? 'gain' : 'loss';
+        const marketCapBillion = (profile.marketCapitalization / 1000).toFixed(2);
+        const shareBillion = (profile.shareOutstanding).toFixed(2);
+        const high = quote.h || 0;
+        const low = quote.l || 0;
+        const currentPrice = quote.c || 0;
+        const openPrice = quote.o || 0;
+        const nameZh = nameDictionary[profile.ticker] || '';
+
+        // 设置页面标题
+        document.title = `${nameZh} ${profile.name} (${profile.ticker}) - 股票详情`;
 
         appContainer.innerHTML = `
             <header class="header">
-                 <h1>${profile.name} (${profile.ticker})</h1>
-                 <a href="/" class="back-link" onclick="navigate(event, '/')">返回首页</a>
+                 <h1>${nameZh} ${profile.name} (${profile.ticker})</h1>
+                 <a href="/" class="back-link" onclick="navigate(event, '/')">← 返回热力图</a>
             </header>
             <div class="stock-detail-page">
                 <main class="main-content">
-                    <div class="stock-header">
-                        <div class="stock-identity">
-                            <img src="${profile.logo}" alt="${profile.name} Logo" class="stock-logo">
-                            <div class="stock-name">
-                                <h1>${profile.name}</h1>
-                                <p>${profile.exchange}: ${profile.ticker}</p>
+                    <div class="card">
+                        <div class="stock-header">
+                            <div class="stock-identity">
+                                <img src="${profile.logo}" alt="${profile.name} Logo" class="stock-logo" onerror="this.style.display='none'">
+                                <div class="stock-name">
+                                    <h1>${profile.name}</h1>
+                                    <p>${profile.exchange}: ${profile.ticker}</p>
+                                </div>
+                            </div>
+                            <div class="stock-price-info">
+                                <div class="current-price">${currentPrice.toFixed(2)} <span class="price-change ${changeClass}">${change >= 0 ? '+' : ''}${changeAmount.toFixed(2)} (${change.toFixed(2)}%)</span></div>
+                                <div class="market-status">数据来源: Finnhub</div>
                             </div>
                         </div>
-                        <div class="stock-price-info">
-                            <div class="current-price">${quote.c.toFixed(2)} <span class="price-change ${changeClass}">${change >= 0 ? '+' : ''}${changeAmount.toFixed(2)} (${change.toFixed(2)}%)</span></div>
-                        </div>
                     </div>
-                    <img src="https://i.imgur.com/8QeD6n2.png" alt="静态K线图" class="chart-image">
+
+                    <section class="chart-section">
+                        <div class="chart-toolbar">
+                            <a href="#" class="active">日线</a>
+                            <a href="#">周线</a>
+                            <a href="#">月线</a>
+                        </div>
+                        <div class="chart-svg-container">
+                            <svg class="chart-svg" viewBox="0 0 900 500">
+                                <g class="grid"><line x1="0" y1="50" x2="900" y2="50"></line><line x1="0" y1="125" x2="900" y2="125"></line><line x1="0" y1="200" x2="900" y2="200"></line><line x1="0" y1="275" x2="900" y2="275"></line><line x1="0" y1="350" x2="900" y2="350"></line><line x1="150" y1="0" x2="150" y2="350"></line><line x1="300" y1="0" x2="300" y2="350"></line><line x1="450" y1="0" x2="450" y2="350"></line><line x1="600" y1="0" x2="600" y2="350"></line><line x1="750" y1="0" x2="750" y2="350"></line></g>
+                                <text class="watermark" x="50%" y="40%">${profile.ticker}</text>
+                                <g transform="translate(50,0)"><g class="candlestick gain"><line x1="20" y1="210" x2="20" y2="280" class="wick"></line><rect x="15" y="240" width="10" height="30" class="body"></rect></g><rect class="volume-bar gain" x="15" y="420" width="10" height="30"></rect><g class="candlestick gain" transform="translate(40, 0)"><line x1="20" y1="180" x2="20" y2="250" class="wick"></line><rect x="15" y="200" width="10" height="40" class="body"></rect></g><rect class="volume-bar gain" x="55" y="410" width="10" height="40"></rect><g class="candlestick loss" transform="translate(80, 0)"><line x1="20" y1="170" x2="20" y2="210" class="wick"></line><rect x="15" y="190" width="10" height="15" class="body"></rect></g><rect class="volume-bar loss" x="95" y="430" width="10" height="20"></rect><g class="candlestick loss" transform="translate(200, 0)"><line x1="20" y1="120" x2="20" y2="180" class="wick"></line><rect x="15" y="150" width="10" height="20" class="body"></rect></g><rect class="volume-bar loss" x="215" y="400" width="10" height="50"></rect><g class="candlestick gain" transform="translate(240, 0)"><line x1="20" y1="140" x2="20" y2="220" class="wick"></line><rect x="15" y="160" width="10" height="50" class="body"></rect></g><rect class="volume-bar gain" x="255" y="380" width="10" height="70"></rect><g class="candlestick gain" transform="translate(480, 0)"><line x1="20" y1="50" x2="20" y2="120" class="wick"></line><rect x="15" y="70" width="10" height="40" class="body"></rect></g><rect class="volume-bar gain" x="495" y="410" width="10" height="40"></rect><g class="candlestick loss" transform="translate(700, 0)"><line x1="20" y1="60" x2="20" y2="150" class="wick"></line><rect x="15" y="80" width="10" height="60" class="body"></rect></g><rect class="volume-bar loss" x="715" y="420" width="10" height="30"></rect></g>
+                                <path class="ma-line-1" d="M 70 250 C 150 200, 300 180, 450 150 S 600 100, 750 80"></path>
+                                <path class="ma-line-2" d="M 70 260 C 150 230, 300 220, 450 180 S 600 150, 750 110"></path>
+                                <g class="axis-labels"><text class="axis-label" x="905" y="55">${(high * 1.02).toFixed(2)}</text><text class="axis-label" x="905" y="130">${(high).toFixed(2)}</text><text class="axis-label" x="905" y="205">${(currentPrice).toFixed(2)}</text><text class="axis-label" x="905" y="280">${(low).toFixed(2)}</text><text class="axis-label" x="905" y="355">${(low * 0.98).toFixed(2)}</text></g>
+                                <g class="time-axis-labels"><text class="time-axis-label" x="150" y="370">10月</text><text class="time-axis-label" x="300" y="370">11月</text><text class="time-axis-label" x="450" y="370">12月</text><text class="time-axis-label" x="600" y="370">1月</text><text class="time-axis-label" x="750" y="370">2月</text></g>
+                            </svg>
+                        </div>
+                    </section>
                 </main>
                 <aside class="right-sidebar">
                     <div class="card">
-                        <h2 class="card-title">估值指标</h2>
-                        <div class="summary-item"><span class="label">市值</span><span class="value">${(profile.marketCapitalization / 1000).toFixed(2)}B USD</span></div>
-                        <div class="summary-item"><span class="label">总股本</span><span class="value">${(profile.shareOutstanding).toFixed(2)}B</span></div>
-                        <div class="summary-item"><span class="label">52周最高</span><span class="value">${quote.h.toFixed(2)}</span></div>
-                        <div class="summary-item"><span class="label">52周最低</span><span class="value">${quote.l.toFixed(2)}</span></div>
+                        <h2 class="card-title">交易面板</h2>
+                        <div class="btn-group"><button class="btn sell">卖出</button><button class="btn buy">买入</button></div>
+                        <div class="summary-item"><span class="label">开盘价</span><span class="value">${openPrice.toFixed(2)}</span></div>
+                        <div class="summary-item"><span class="label">最高价</span><span class="value">${high.toFixed(2)}</span></div>
+                        <div class="summary-item"><span class="label">最低价</span><span class="value">${low.toFixed(2)}</span></div>
+                    </div>
+                    <div class="card">
+                        <h2 class="card-title">关于 ${nameZh}</h2>
+                        <p class="company-info-text">${profile.description || '暂无公司简介。'}</p>
+                        <div class="summary-item"><span class="label">市值</span><span class="value">${marketCapBillion}B USD</span></div>
+                        <div class="summary-item"><span class="label">总股本</span><span class="value">${shareBillion}B</span></div>
+                        <div class="summary-item"><span class="label">行业</span><span class="value">${profile.finnhubIndustry || 'N/A'}</span></div>
+                        <div class="summary-item"><span class="label">官网</span><span class="value"><a href="${profile.weburl}" target="_blank" rel="noopener noreferrer">${profile.weburl ? profile.weburl.replace(/^(https?:\/\/)?(www\.)?/, '') : 'N/A'}</a></span></div>
                     </div>
                 </aside>
             </div>`;
     } catch (error) {
+        console.error('Error rendering stock detail page:', error);
         appContainer.innerHTML = `<div class="loading-indicator">${error.message}</div>`;
     }
 }
@@ -249,8 +304,24 @@ window.addEventListener('resize', () => {
         if (fullMarketData && !new URLSearchParams(window.location.search).get('page')) {
             const container = document.getElementById('heatmap-container-final');
             if(container) {
+                // Re-render the treemap on resize
                 generateTreemap(fullMarketData, container);
             }
         }
     }, 250);
 });
+
+// For simplicity, defining the nameDictionary here as well, so it's accessible in renderStockDetailPage
+const nameDictionary = {
+    'AAPL': '苹果', 'MSFT': '微软', 'GOOGL': '谷歌', 'AMZN': '亚马逊', 'NVDA': '英伟达',
+    'TSLA': '特斯拉', 'META': 'Meta', 'BRK-B': '伯克希尔', 'LLY': '礼来', 'V': 'Visa',
+    'JPM': '摩根大通', 'XOM': '埃克森美孚', 'WMT': '沃尔玛', 'UNH': '联合健康', 'MA': '万事达',
+    'JNJ': '强生', 'PG': '宝洁', 'ORCL': '甲骨文', 'HD': '家得宝', 'AVGO': '博通',
+    'MRK': '默克', 'CVX': '雪佛龙', 'PEP': '百事', 'COST': '好市多', 'ADBE': 'Adobe',
+    'KO': '可口可乐', 'BAC': '美国银行', 'CRM': '赛富时', 'MCD': "麦当劳", 'PFE': '辉瑞',
+    'NFLX': '奈飞', 'AMD': '超威半导体', 'DIS': '迪士尼', 'INTC': '英特尔', 'NKE': '耐克',
+    'CAT': '卡特彼勒', 'BA': '波音', 'CSCO': '思科', 'T': 'AT&T', 'UBER': '优步',
+    'PYPL': 'PayPal', 'QCOM': '高通', 'SBUX': '星巴克', 'IBM': 'IBM', 'GE': '通用电气',
+    'F': '福特汽车', 'GM': '通用汽车', 'DAL': '达美航空', 'UAL': '联合航空', 'AAL': '美国航空',
+    'MAR': '万豪国际', 'HLT': '希尔顿', 'BKNG': '缤客', 'EXPE': '亿客行', 'CCL': '嘉年华邮轮'
+};
