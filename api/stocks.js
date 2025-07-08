@@ -2,7 +2,7 @@ import { Redis } from '@upstash/redis';
 
 // --- 配置 ---
 // *** 最终破解：使用全新的缓存键，确保旧数据被彻底清除 ***
-const CACHE_KEY = 'stock_heatmap_data_v-case-cracked'; 
+const CACHE_KEY = 'stock_heatmap_data_v-final-puzzle-solved'; 
 const CACHE_TTL_SECONDS = 300; // 缓存5分钟
 
 const redis = new Redis({
@@ -10,9 +10,9 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN,
 });
 
-// --- 中英文字典 (扩充完整版) ---
+// --- 中英文字典 (扩充完整版，兼容不同写法) ---
 const sectorDictionary = {
-    // GICS Sector Level
+    // GICS Sector Level (主要行业)
     "Energy": "能源",
     "Materials": "原材料",
     "Industrials": "工业",
@@ -25,7 +25,7 @@ const sectorDictionary = {
     "Utilities": "公用事业",
     "Real Estate": "房地产",
 
-    // Finnhub 可能返回的更详细的行业名 (补充)
+    // Finnhub 可能返回的更详细或不一致的行业名 (补充)
     "Automobiles & Components": "汽车与零部件",
     "Banks": "银行",
     "Capital Goods": "资本品",
@@ -38,13 +38,14 @@ const sectorDictionary = {
     "Insurance": "保险",
     "Media & Entertainment": "媒体与娱乐",
     "Pharmaceuticals, Biotechnology & Life Sciences": "制药、生物科技与生命科学",
-    "Retailing": "零售业",
+    "Retailing": "零售业", // 包含长版
+    "Retail": "零售业",    // 包含短版，确保兼容
     "Semiconductors & Semiconductor Equipment": "半导体与设备",
     "Software & Services": "软件与服务",
     "Technology Hardware & Equipment": "技术硬件与设备",
     "Telecommunication Services": "电信服务",
     "Transportation": "交通运输",
-    "Hotels, Restaurants & Leisure": "酒店、餐厅与休闲", // 补充截图中的行业
+    "Hotels, Restaurants & Leisure": "酒店、餐厅与休闲",
 };
 
 const nameDictionary = {
@@ -162,7 +163,7 @@ async function fetchApiDataForTicker(ticker) {
 async function fetchSingleStockData(ticker) {
     const apiKey = process.env.FINNHUB_API_KEY;
     if (!apiKey) throw new Error('FINNHUB_API_KEY is not configured.');
-
+    // ... (rest of the function is unchanged and correct)
     const fetchFromFinnhub = async (endpoint) => {
         const url = `https://finnhub.io/api/v1${endpoint}&token=${apiKey}`;
         const res = await fetch(url);
