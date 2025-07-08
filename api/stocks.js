@@ -1,8 +1,8 @@
 import { Redis } from '@upstash/redis';
 
 // --- 配置 ---
-// *** 最终破解：使用全新的缓存键，确保旧数据被彻底清除 ***
-const CACHE_KEY = 'stock_heatmap_data_v-final-puzzle-solved'; 
+// *** 终极必杀技：使用全新的、充满胜利喜悦的缓存键，确保万无一失！***
+const CACHE_KEY = 'stock_heatmap_data_v-grand-finale'; 
 const CACHE_TTL_SECONDS = 300; // 缓存5分钟
 
 const redis = new Redis({
@@ -10,7 +10,7 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN,
 });
 
-// --- 中英文字典 (扩充完整版，兼容不同写法) ---
+// --- 中英文字典 (终极完整版) ---
 const sectorDictionary = {
     // GICS Sector Level (主要行业)
     "Energy": "能源",
@@ -21,31 +21,50 @@ const sectorDictionary = {
     "Health Care": "医疗健康",
     "Financials": "金融",
     "Information Technology": "信息技术",
+    "Technology": "信息技术", // 同义词
     "Communication Services": "通讯服务",
+    "Communications": "通讯服务", // 同义词
     "Utilities": "公用事业",
     "Real Estate": "房地产",
 
-    // Finnhub 可能返回的更详细或不一致的行业名 (补充)
-    "Automobiles & Components": "汽车与零部件",
-    "Banks": "银行",
+    // Finnhub & User's List (补充的详细行业名)
+    "Aerospace & Defense": "航空航天与国防",
+    "Aerospace": "航空航天",
+    "Airlines": "航空公司",
+    "Automobiles & Components": "汽车",
+    "Automobiles": "汽车",
+    "Banks": "银行业",
+    "Banking": "银行业",
+    "Beverages": "饮料",
     "Capital Goods": "资本品",
-    "Commercial & Professional Services": "商业与专业服务",
+    "Commercial & Professional Services": "商业服务",
+    "Consumer goods": "消费品",
+    "Consumer products": "消费品",
     "Diversified Financials": "多元化金融",
-    "Food & Staples Retailing": "食品与必需品零售",
-    "Food, Beverage & Tobacco": "食品、饮料与烟草",
-    "Health Care Equipment & Services": "医疗保健设备与服务",
+    "Financial Services": "金融服务",
+    "Food & Staples Retailing": "食品零售",
+    "Food, Beverage & Tobacco": "食品与烟草",
+    "Health Care Equipment & Services": "医疗设备与服务",
+    "Hotels, Restaurants & Leisure": "酒店与休闲",
     "Household & Personal Products": "家庭与个人用品",
     "Insurance": "保险",
+    "Machinery": "机械",
     "Media & Entertainment": "媒体与娱乐",
-    "Pharmaceuticals, Biotechnology & Life Sciences": "制药、生物科技与生命科学",
-    "Retailing": "零售业", // 包含长版
-    "Retail": "零售业",    // 包含短版，确保兼容
-    "Semiconductors & Semiconductor Equipment": "半导体与设备",
+    "Media": "媒体",
+    "Pharmaceuticals, Biotechnology & Life Sciences": "制药与生物科技",
+    "Pharmaceuticals": "制药",
+    "Retailing": "零售业", 
+    "Retail": "零售业",    
+    "Road & Rail": "陆路运输",
+    "Semiconductors & Semiconductor Equipment": "半导体",
+    "Semiconductors": "半导体",
     "Software & Services": "软件与服务",
-    "Technology Hardware & Equipment": "技术硬件与设备",
+    "Technology Hardware & Equipment": "技术硬件",
     "Telecommunication Services": "电信服务",
+    "Telecommunication": "电信服务", // 同义词
+    "Textiles, Apparel & Luxury Goods": "纺织品与服装",
+    "Textiles": "纺织品",
     "Transportation": "交通运输",
-    "Hotels, Restaurants & Leisure": "酒店、餐厅与休闲",
 };
 
 const nameDictionary = {
@@ -143,7 +162,7 @@ async function fetchApiDataForTicker(ticker) {
         if (!profile || !quote || typeof profile.marketCapitalization === 'undefined' || profile.marketCapitalization === 0) return null;
         
         const englishSector = profile.finnhubIndustry;
-        const chineseSector = sectorDictionary[englishSector] || englishSector;
+        const chineseSector = sectorDictionary[englishSector] || englishSector; // 使用我们完备的字典
         const chineseName = nameDictionary[ticker] || profile.name.split(' ')[0];
 
         return { 
@@ -163,7 +182,7 @@ async function fetchApiDataForTicker(ticker) {
 async function fetchSingleStockData(ticker) {
     const apiKey = process.env.FINNHUB_API_KEY;
     if (!apiKey) throw new Error('FINNHUB_API_KEY is not configured.');
-    // ... (rest of the function is unchanged and correct)
+    
     const fetchFromFinnhub = async (endpoint) => {
         const url = `https://finnhub.io/api/v1${endpoint}&token=${apiKey}`;
         const res = await fetch(url);
