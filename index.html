@@ -3,33 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>动态股票热力图</title>
-    <!-- 链接到我们的CSS样式文件 -->
+    <title>股票热力图</title>
+    <!-- 引入Google Fonts以获得更接近的字体 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <header class="header">
-        <h1>股票热力图 (动态版)</h1>
-        <div class="data-source">数据源: 标普500指数 (模拟API)</div>
-    </header>
-
-    <!-- 这是动态内容的核心挂载点 -->
-    <main id="heatmap-container" class="heatmap-container">
-        <!-- 初始时显示加载状态 -->
-        <div id="loading-indicator" class="loading-indicator">数据加载中，请稍候...</div>
-    </main>
-
-    <footer class="legend">
-        <div class="legend-item"><span>跌幅</span></div>
-        <div class="legend-item"><div class="legend-color-box loss-strong"></div><span>< -2%</span></div>
-        <div class="legend-item"><div class="legend-color-box loss-medium"></div><span>-1%</span></div>
-        <div class="legend-item"><div class="legend-color-box flat"></div><span>0%</span></div>
-        <div class="legend-item"><div class="legend-color-box gain-medium"></div><span>+1%</span></div>
-        <div class="legend-item"><div class="legend-color-box gain-strong"></div><span>> +2%</span></div>
-        <div class="legend-item"><span>涨幅</span></div>
-    </footer>
+    <!-- 整个应用都将渲染在这个容器里 -->
+    <div id="app-container"></div>
     
-    <!-- 在body结束前链接到我们的JavaScript脚本文件 -->
     <script src="script.js"></script>
 </body>
 </html>
