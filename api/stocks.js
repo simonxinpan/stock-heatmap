@@ -1,12 +1,12 @@
 import { Redis } from '@upstash/redis';
 
 // --- 配置 ---
-const CACHE_KEY = 'stock_heatmap_data_v2.1';
+const CACHE_KEY = 'stock_heatmap_data_v3.1'; // 更新缓存键以强制刷新
 const CACHE_TTL_SECONDS = 300; // 缓存5分钟
 
 const redis = Redis.fromEnv(); 
 
-// --- 中英文字典 ---
+// --- 中英文字典 (这是翻译的核心) ---
 const sectorDictionary = {
     "Communication Services": "通讯服务",
     "Consumer Discretionary": "非必需消费品",
@@ -108,15 +108,17 @@ async function fetchApiDataForTicker(ticker) {
         if (!profile || !quote || typeof profile.marketCapitalization === 'undefined' || profile.marketCapitalization === 0) return null;
         
         const englishSector = profile.finnhubIndustry;
+        // *** 关键的翻译步骤 ***
         const chineseSector = sectorDictionary[englishSector] || englishSector;
         const chineseName = nameDictionary[ticker] || profile.name.split(' ')[0];
 
         return { 
             ticker, 
             name_zh: chineseName, 
-            sector: chineseSector, 
+            sector: chineseSector, // <-- 确保这里返回的是中文行业名
             market_cap: profile.marketCapitalization, 
-            change_percent: quote.dp 
+            change_percent: quote.dp,
+            logo: profile.logo
         };
     } catch (error) {
         console.error(`Error fetching data for ticker ${ticker}:`, error);
@@ -135,15 +137,12 @@ async function fetchSingleStockData(ticker) {
         return res.json();
     };
     
-    // 同时请求公司简介和实时报价
     const [profile, quote] = await Promise.all([
         fetchFromFinnhub(`/stock/profile2?symbol=${ticker}`),
         fetchFromFinnhub(`/quote?symbol=${ticker}`)
     ]);
     
-    // Finnhub不直接提供公司简介，我们可以自己组合一个
     const description = `(自动生成) ${profile.name} 是一家总部位于 ${profile.country || '未知'} 的公司，属于 ${profile.finnhubIndustry || '未知'} 行业，于 ${profile.ipo || '未知日期'} 上市。`;
     
-    // 返回一个包含了简介的 profile 对象
     return { profile: { ...profile, description }, quote };
 }

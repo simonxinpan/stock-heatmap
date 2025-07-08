@@ -95,7 +95,6 @@ function generateTreemap(allStocks, container) {
 
             const titleEl = document.createElement('h2');
             titleEl.className = 'treemap-title';
-            // *** 关键修正点：确保此处使用的currentItem.name是中文行业名 ***
             titleEl.textContent = currentItem.name;
             sectorEl.appendChild(titleEl);
             
@@ -161,7 +160,6 @@ function createStockElement(stock, width, height) {
 function groupDataBySector(data) {
     if (!data) return {};
     const grouped = data.reduce((acc, stock) => {
-        // 此处的 stock.sector 已经是中文名 (由后端API提供)
         const sector = stock.sector || '其他';
         if (!acc[sector]) {
             acc[sector] = { stocks: [], total_market_cap: 0 };
