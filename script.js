@@ -1,15 +1,19 @@
 const appContainer = document.getElementById('app-container');
 let fullMarketData = null;
 
-// --- 路由系统 ---
+// *** 1. 升级路由系统 ***
 async function router() {
     showLoading();
     const params = new URLSearchParams(window.location.search);
     const page = params.get('page');
     const symbol = params.get('symbol');
+    const sector = params.get('sector');
 
     if (page === 'stock' && symbol) {
         await renderStockDetailPage(symbol);
+    } else if (sector) {
+        // 解码行业名称，以防有特殊字符
+        await renderHomePage(decodeURIComponent(sector));
     } else {
         document.title = '股票热力图';
         await renderHomePage();
@@ -21,7 +25,8 @@ function showLoading() {
     appContainer.innerHTML = `<div class="loading-indicator"><div class="spinner"></div><p>数据加载中...</p></div>`;
 }
 
-async function renderHomePage() {
+// *** 2. 升级主页渲染函数，使其能处理过滤 ***
+async function renderHomePage(sectorName = null) {
     try {
         if (!fullMarketData) {
             const res = await fetch('/api/stocks');
@@ -32,22 +37,49 @@ async function renderHomePage() {
             fullMarketData = await res.json();
         }
 
+        let dataToRender = fullMarketData;
+        let headerHtml;
+
+        if (sectorName) {
+            // 如果传入了行业名，则过滤数据
+            dataToRender = fullMarketData.filter(stock => stock.sector === sectorName);
+            document.title = `${sectorName} - 行业热力图`;
+            headerHtml = `
+                <header class="header">
+                    <h1>${sectorName}</h1>
+                    <a href="/" class="back-link" onclick="navigate(event, '/')">← 返回全景图</a>
+                </header>`;
+        } else {
+            // 否则，渲染全景图
+            headerHtml = `<header class="header"><h1>股票热力图</h1><div class="data-source">标普500指数 (S&P 500)</div></header>`;
+        }
+
         appContainer.innerHTML = `
-            <header class="header"><h1>股票热力图</h1><div class="data-source">标普500指数 (S&P 500)</div></header>
+            ${headerHtml}
             <main id="heatmap-container-final" class="heatmap-container-final"></main>
             <footer class="legend">
-                <div class="legend-item"><div class="legend-color-box loss-5" style="color:white;text-align:center;">L</div></div>
-                <div class="legend-item"><div class="legend-color-box loss-3" style="color:white;text-align:center;">L</div></div>
-                <div class="legend-item"><div class="legend-color-box flat" style="color:black;text-align:center;">N</div></div>
-                <div class="legend-item"><div class="legend-color-box gain-3" style="color:white;text-align:center;">G</div></div>
-                <div class="legend-item"><div class="legend-color-box gain-5" style="color:white;text-align:center;">G</div></div>
+                <div class="legend-item"><div class="legend-color-box loss-5"></div></div>
+                <div class="legend-item"><div class="legend-color-box loss-3"></div></div>
+                <div class="legend-item"><div class="legend-color-box flat"></div></div>
+                <div class="legend-item"><div class="legend-color-box gain-3"></div></div>
+                <div class="legend-item"><div class="legend-color-box gain-5"></div></div>
             </footer>
         `;
+        
+        // 如果是行业视图，则不显示图例
+        if(sectorName) {
+            appContainer.querySelector('.legend').style.display = 'none';
+        }
 
         setTimeout(() => {
             const container = document.getElementById('heatmap-container-final');
             if (container) {
-                generateTreemap(fullMarketData, container);
+                // 如果是行业视图，直接渲染股票，不再分组
+                if (sectorName) {
+                    generateTreemap(dataToRender, container, false);
+                } else {
+                    generateTreemap(dataToRender, container, true);
+                }
             }
         }, 0);
     } catch (error) {
@@ -56,20 +88,24 @@ async function renderHomePage() {
 }
 
 // --- Treemap布局算法和渲染 ---
-function generateTreemap(allStocks, container) {
+function generateTreemap(data, container, groupIntoSectors = true) {
     container.innerHTML = '';
     const { clientWidth: totalWidth, clientHeight: totalHeight } = container;
-    if (totalWidth === 0 || totalHeight === 0 || !allStocks) return;
+    if (totalWidth === 0 || totalHeight === 0 || !data) return;
 
-    const stocksBySector = groupDataBySector(allStocks);
-
-    let sectors = Object.entries(stocksBySector).map(([sectorName, sectorData]) => ({
-        name: sectorName,
-        value: sectorData.total_market_cap,
-        items: sectorData.stocks.map(s => ({ ...s, value: s.market_cap }))
-    })).sort((a, b) => b.value - a.value);
+    let itemsToLayout;
+    if (groupIntoSectors) {
+        const stocksBySector = groupDataBySector(data);
+        itemsToLayout = Object.entries(stocksBySector).map(([sectorName, sectorData]) => ({
+            name: sectorName,
+            value: sectorData.total_market_cap,
+            items: sectorData.stocks.map(s => ({ ...s, value: s.market_cap }))
+        })).sort((a, b) => b.value - a.value);
+    } else {
+        itemsToLayout = data.map(s => ({ ...s, value: s.market_cap })).sort((a,b) => b.market_cap - a.market_cap);
+    }
     
-    layout(sectors, 0, 0, totalWidth, totalHeight, container, true);
+    layout(itemsToLayout, 0, 0, totalWidth, totalHeight, container, groupIntoSectors);
 
     function layout(items, x, y, width, height, parentEl, isSectorLevel) {
         if (!items.length || width <= 1 || height <= 1) return;
@@ -93,15 +129,18 @@ function generateTreemap(allStocks, container) {
             sectorEl.style.width = `${itemWidth}px`;
             sectorEl.style.height = `${itemHeight}px`;
 
-            const titleEl = document.createElement('h2');
-            titleEl.className = 'treemap-title';
-            titleEl.textContent = currentItem.name;
-            sectorEl.appendChild(titleEl);
+            // *** 3. 让行业标题可点击 ***
+            const titleLink = document.createElement('a');
+            titleLink.className = 'treemap-title-link';
+            titleLink.href = `/?sector=${encodeURIComponent(currentItem.name)}`;
+            titleLink.onclick = (e) => navigate(e, titleLink.href);
+            titleLink.innerHTML = `<h2 class="treemap-title">${currentItem.name}</h2>`;
+            sectorEl.appendChild(titleLink);
             
             parentEl.appendChild(sectorEl);
 
-            const titleHeight = titleEl.offsetHeight > 0 ? titleEl.offsetHeight : 28;
-            layout(currentItem.items, 0, titleHeight, itemWidth -4, itemHeight - titleHeight-4, sectorEl, false);
+            const titleHeight = titleLink.offsetHeight > 0 ? titleLink.offsetHeight : 28;
+            layout(currentItem.items, 0, titleHeight, itemWidth - 4, itemHeight - titleHeight - 4, sectorEl, false);
             
             if (isHorizontal) {
                 layout(items.slice(1), x + itemWidth, y, width - itemWidth, height, parentEl, true);
@@ -197,6 +236,7 @@ function navigate(event, path) {
     router();
 }
 
+// 详情页函数保持不变
 async function renderStockDetailPage(symbol) {
     try {
         appContainer.innerHTML = `<div class="loading-indicator"><div class="spinner"></div><p>正在加载 ${symbol} 的详细数据...</p></div>`;
@@ -261,6 +301,7 @@ async function renderStockDetailPage(symbol) {
     }
 }
 
+// --- 程序入口 ---
 window.addEventListener('popstate', router);
 document.addEventListener('DOMContentLoaded', router);
 
@@ -268,10 +309,18 @@ let resizeTimeout;
 window.addEventListener('resize', () => {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
-        if (fullMarketData && !new URLSearchParams(window.location.search).get('page')) {
+        // 调整大小也需要考虑当前是哪个视图
+        const params = new URLSearchParams(window.location.search);
+        const sector = params.get('sector');
+        if (fullMarketData) {
             const container = document.getElementById('heatmap-container-final');
             if(container) {
-                generateTreemap(fullMarketData, container);
+                if (sector) {
+                    const dataToRender = fullMarketData.filter(stock => stock.sector === decodeURIComponent(sector));
+                    generateTreemap(dataToRender, container, false);
+                } else {
+                    generateTreemap(fullMarketData, container, true);
+                }
             }
         }
     }, 250);
