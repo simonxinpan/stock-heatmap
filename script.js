@@ -36,11 +36,13 @@ async function renderHomePage() {
             <header class="header"><h1>股票热力图</h1><div class="data-source">标普500指数 (S&P 500)</div></header>
             <main id="heatmap-container-final" class="heatmap-container-final"></main>
             <footer class="legend">
-                <div class="legend-item"><div class="legend-color-box loss-strong"></div><span>< -2%</span></div>
-                <div class="legend-item"><div class="legend-color-box loss-medium"></div><span>-1%</span></div>
+                <div class="legend-item"><div class="legend-color-box loss-extreme"></div><span>< -3%</span></div>
+                <div class="legend-item"><div class="legend-color-box loss-strong"></div><span>-1.5%</span></div>
+                <div class="legend-item"><div class="legend-color-box loss-medium"></div><span>-0.5%</span></div>
                 <div class="legend-item"><div class="legend-color-box flat"></div><span>0%</span></div>
-                <div class="legend-item"><div class="legend-color-box gain-medium"></div><span>+1%</span></div>
-                <div class="legend-item"><div class="legend-color-box gain-strong"></div><span>> +2%</span></div>
+                <div class="legend-item"><div class="legend-color-box gain-medium"></div><span>+0.5%</span></div>
+                <div class="legend-item"><div class="legend-color-box gain-strong"></div><span>+1.5%</span></div>
+                <div class="legend-item"><div class="legend-color-box gain-extreme"></div><span>> +3%</span></div>
             </footer>
         `;
 
@@ -59,7 +61,7 @@ async function renderHomePage() {
 function generateTreemap(allStocks, container) {
     container.innerHTML = '';
     const { clientWidth: totalWidth, clientHeight: totalHeight } = container;
-    if (totalWidth === 0 || totalHeight === 0) return;
+    if (totalWidth === 0 || totalHeight === 0 || !allStocks) return;
 
     const stocksBySector = groupDataBySector(allStocks);
 
@@ -72,74 +74,69 @@ function generateTreemap(allStocks, container) {
     layout(sectors, 0, 0, totalWidth, totalHeight, container, true);
 
     function layout(items, x, y, width, height, parentEl, isSectorLevel) {
-        if (!items.length || width <= 0 || height <= 0) return;
+        if (!items.length || width <= 1 || height <= 1) return;
 
         const totalValue = items.reduce((sum, item) => sum + item.value, 0);
         if (totalValue <= 0) return;
 
-        let currentItem = items[0];
-        let itemProportion = currentItem.value / totalValue;
-        let isHorizontal = width > height;
-        let itemEl;
+        const currentItem = items[0];
+        const itemProportion = currentItem.value / totalValue;
+        const isHorizontal = width > height;
 
         if (isSectorLevel) {
-            itemEl = document.createElement('div');
-            itemEl.className = 'treemap-sector';
+            const sectorEl = document.createElement('div');
+            sectorEl.className = 'treemap-sector';
+            
+            let itemWidth = isHorizontal ? width * itemProportion : width;
+            let itemHeight = isHorizontal ? height : height * itemProportion;
+
+            sectorEl.style.left = `${x}px`;
+            sectorEl.style.top = `${y}px`;
+            sectorEl.style.width = `${itemWidth}px`;
+            sectorEl.style.height = `${itemHeight}px`;
 
             const titleEl = document.createElement('h2');
             titleEl.className = 'treemap-title';
             titleEl.textContent = currentItem.name;
-            itemEl.appendChild(titleEl);
+            sectorEl.appendChild(titleEl);
+            
+            parentEl.appendChild(sectorEl);
 
-            const titleHeight = 28;
-            const contentWidth = width - 4; // 减去边框
-            const contentHeight = height - titleHeight - 2; // 减去标题和边框
-
-            if (contentWidth > 0 && contentHeight > 0) {
-                 // 递归调用，为子项创建布局
-                 layout(currentItem.items, 0, 0, contentWidth, contentHeight, itemEl, false);
+            const titleHeight = titleEl.offsetHeight > 0 ? titleEl.offsetHeight : 25; // Fallback
+            layout(currentItem.items, 0, titleHeight, itemWidth -2, itemHeight - titleHeight -2, sectorEl, false);
+            
+            if (isHorizontal) {
+                layout(items.slice(1), x + itemWidth, y, width - itemWidth, height, parentEl, true);
+            } else {
+                layout(items.slice(1), x, y + itemHeight, width, height - itemHeight, parentEl, true);
             }
-        } else {
-            itemEl = createStockElement(currentItem, width * itemProportion, height);
-        }
-        
-        // 此处有一个小逻辑错误，父元素不应重复添加子元素，应由子级递归处理
-        if(isSectorLevel) {
-            parentEl.appendChild(itemEl);
-        } else {
-            // 在非板块层级，直接将股票方块添加到其父级（即板块）
-            parentEl.appendChild(itemEl);
-        }
 
-
-        let itemWidth, itemHeight;
-        if (isHorizontal) {
-            itemWidth = width * itemProportion;
-            itemHeight = height;
-            itemEl.style.left = `${x}px`;
-            itemEl.style.top = `${y}px`;
-            itemEl.style.width = `${itemWidth}px`;
-            itemEl.style.height = `${itemHeight}px`;
-            layout(items.slice(1), x + itemWidth, y, width - itemWidth, height, parentEl, isSectorLevel);
         } else {
-            itemWidth = width;
-            itemHeight = height * itemProportion;
-            itemEl.style.left = `${x}px`;
-            itemEl.style.top = `${y}px`;
-            itemEl.style.width = `${itemWidth}px`;
-            itemEl.style.height = `${itemHeight}px`;
-            layout(items.slice(1), x, y + itemHeight, width, height - itemHeight, parentEl, isSectorLevel);
+            let itemWidth = isHorizontal ? width * itemProportion : width;
+            let itemHeight = isHorizontal ? height : height * itemProportion;
+            
+            const stockEl = createStockElement(currentItem, itemWidth, itemHeight);
+            stockEl.style.left = `${x}px`;
+            stockEl.style.top = `${y}px`;
+            
+            parentEl.appendChild(stockEl);
+            
+            if (isHorizontal) {
+                layout(items.slice(1), x + itemWidth, y, width - itemWidth, height, parentEl, false);
+            } else {
+                layout(items.slice(1), x, y + itemHeight, width, height - itemHeight, parentEl, false);
+            }
         }
     }
 }
 
+// === START: 智能渲染函数重构 ===
 function createStockElement(stock, width, height) {
     const stockLink = document.createElement('a');
     stockLink.className = 'treemap-stock';
     stockLink.href = `/?page=stock&symbol=${stock.ticker}`;
     stockLink.onclick = (e) => navigate(e, stockLink.href);
     
-    // 把定位样式直接应用在 a 标签上
     stockLink.style.width = `${width}px`;
     stockLink.style.height = `${height}px`;
 
@@ -148,29 +145,24 @@ function createStockElement(stock, width, height) {
     stockDiv.className = `stock ${getColorClass(change)}`;
     
     const area = width * height;
-    if (area > 8000) {
-        stockDiv.classList.add('detail-full');
-    } else if (area > 3000) {
-        stockDiv.classList.add('detail-medium');
-    } else {
-        stockDiv.classList.add('detail-small');
-    }
-    
-    const sectorName = stock.sector || '其他';
+    if (area > 25000) stockDiv.classList.add('detail-xl');
+    else if (area > 10000) stockDiv.classList.add('detail-lg');
+    else if (area > 3500) stockDiv.classList.add('detail-md');
+    else if (area > 800) stockDiv.classList.add('detail-sm');
+    else stockDiv.classList.add('detail-xs');
 
     stockDiv.innerHTML = `
-        <div class="stock-content">
-            <span class="sector-label">${sectorName}</span>
-            <span class="stock-ticker">${stock.ticker}</span>
-            <span class="stock-name-zh">${stock.name_zh}</span>
-        </div>
+        <span class="stock-ticker">${stock.ticker}</span>
+        <span class="stock-name-zh">${stock.name_zh}</span>
         <span class="stock-change">${change >= 0 ? '+' : ''}${change ? change.toFixed(2) : '0.00'}%</span>`;
+    
     stockLink.appendChild(stockDiv);
     return stockLink;
 }
+// === END: 智能渲染函数重构 ===
 
-// --- 辅助函数 ---
 function groupDataBySector(data) {
+    if (!data) return {};
     const grouped = data.reduce((acc, stock) => {
         const sector = stock.sector || '其他';
         if (!acc[sector]) {
@@ -188,16 +180,20 @@ function groupDataBySector(data) {
     return grouped;
 }
 
+// === START: 颜色映射函数重构 ===
 function getColorClass(change) {
-    if (isNaN(change) || (change > -0.2 && change < 0.2)) return 'flat';
-    if (change > 2) return 'gain-strong';
-    if (change > 1) return 'gain-medium';
-    if (change >= 0.2) return 'gain-weak';
-    if (change < -2) return 'loss-strong';
-    if (change < -1) return 'loss-medium';
-    if (change < -0.2) return 'loss-weak';
+    if (isNaN(change) || (change > -0.01 && change < 0.01)) return 'flat';
+    if (change > 3) return 'gain-extreme';
+    if (change > 1.5) return 'gain-strong';
+    if (change > 0.5) return 'gain-medium';
+    if (change > 0) return 'gain-weak';
+    if (change < -3) return 'loss-extreme';
+    if (change < -1.5) return 'loss-strong';
+    if (change < -0.5) return 'loss-medium';
+    if (change <= 0) return 'loss-weak';
     return 'flat';
 }
+// === END: 颜色映射函数重构 ===
 
 function navigate(event, path) {
     event.preventDefault();
@@ -212,7 +208,6 @@ async function renderStockDetailPage(symbol) {
         if (!res.ok) throw new Error('获取股票详情失败');
         const { profile, quote } = await res.json();
 
-        // 数据准备
         const change = quote.dp || 0;
         const changeAmount = quote.d || 0;
         const changeClass = change >= 0 ? 'gain' : 'loss';
@@ -224,7 +219,6 @@ async function renderStockDetailPage(symbol) {
         const openPrice = quote.o || 0;
         const nameZh = nameDictionary[profile.ticker] || '';
 
-        // 设置页面标题
         document.title = `${nameZh} ${profile.name} (${profile.ticker}) - 股票详情`;
 
         appContainer.innerHTML = `
@@ -251,11 +245,7 @@ async function renderStockDetailPage(symbol) {
                     </div>
 
                     <section class="chart-section">
-                        <div class="chart-toolbar">
-                            <a href="#" class="active">日线</a>
-                            <a href="#">周线</a>
-                            <a href="#">月线</a>
-                        </div>
+                        <div class="chart-toolbar"><a href="#" class="active">日线</a><a href="#">周线</a><a href="#">月线</a></div>
                         <div class="chart-svg-container">
                             <svg class="chart-svg" viewBox="0 0 900 500">
                                 <g class="grid"><line x1="0" y1="50" x2="900" y2="50"></line><line x1="0" y1="125" x2="900" y2="125"></line><line x1="0" y1="200" x2="900" y2="200"></line><line x1="0" y1="275" x2="900" y2="275"></line><line x1="0" y1="350" x2="900" y2="350"></line><line x1="150" y1="0" x2="150" y2="350"></line><line x1="300" y1="0" x2="300" y2="350"></line><line x1="450" y1="0" x2="450" y2="350"></line><line x1="600" y1="0" x2="600" y2="350"></line><line x1="750" y1="0" x2="750" y2="350"></line></g>
@@ -270,21 +260,8 @@ async function renderStockDetailPage(symbol) {
                     </section>
                 </main>
                 <aside class="right-sidebar">
-                    <div class="card">
-                        <h2 class="card-title">交易面板</h2>
-                        <div class="btn-group"><button class="btn sell">卖出</button><button class="btn buy">买入</button></div>
-                        <div class="summary-item"><span class="label">开盘价</span><span class="value">${openPrice.toFixed(2)}</span></div>
-                        <div class="summary-item"><span class="label">最高价</span><span class="value">${high.toFixed(2)}</span></div>
-                        <div class="summary-item"><span class="label">最低价</span><span class="value">${low.toFixed(2)}</span></div>
-                    </div>
-                    <div class="card">
-                        <h2 class="card-title">关于 ${nameZh}</h2>
-                        <p class="company-info-text">${profile.description || '暂无公司简介。'}</p>
-                        <div class="summary-item"><span class="label">市值</span><span class="value">${marketCapBillion}B USD</span></div>
-                        <div class="summary-item"><span class="label">总股本</span><span class="value">${shareBillion}B</span></div>
-                        <div class="summary-item"><span class="label">行业</span><span class="value">${profile.finnhubIndustry || 'N/A'}</span></div>
-                        <div class="summary-item"><span class="label">官网</span><span class="value"><a href="${profile.weburl}" target="_blank" rel="noopener noreferrer">${profile.weburl ? profile.weburl.replace(/^(https?:\/\/)?(www\.)?/, '') : 'N/A'}</a></span></div>
-                    </div>
+                    <div class="card"><h2 class="card-title">交易面板</h2><div class="btn-group"><button class="btn sell">卖出</button><button class="btn buy">买入</button></div><div class="summary-item"><span class="label">开盘价</span><span class="value">${openPrice.toFixed(2)}</span></div><div class="summary-item"><span class="label">最高价</span><span class="value">${high.toFixed(2)}</span></div><div class="summary-item"><span class="label">最低价</span><span class="value">${low.toFixed(2)}</span></div></div>
+                    <div class="card"><h2 class="card-title">关于 ${nameZh}</h2><p class="company-info-text">${profile.description || '暂无公司简介。'}</p><div class="summary-item"><span class="label">市值</span><span class="value">${marketCapBillion}B USD</span></div><div class="summary-item"><span class="label">总股本</span><span class="value">${shareBillion}B</span></div><div class="summary-item"><span class="label">行业</span><span class="value">${profile.finnhubIndustry || 'N/A'}</span></div><div class="summary-item"><span class="label">官网</span><span class="value"><a href="${profile.weburl}" target="_blank" rel="noopener noreferrer">${profile.weburl ? profile.weburl.replace(/^(https?:\/\/)?(www\.)?/, '') : 'N/A'}</a></span></div></div>
                 </aside>
             </div>`;
     } catch (error) {
@@ -293,7 +270,6 @@ async function renderStockDetailPage(symbol) {
     }
 }
 
-// --- 程序入口 ---
 window.addEventListener('popstate', router);
 document.addEventListener('DOMContentLoaded', router);
 
@@ -304,14 +280,12 @@ window.addEventListener('resize', () => {
         if (fullMarketData && !new URLSearchParams(window.location.search).get('page')) {
             const container = document.getElementById('heatmap-container-final');
             if(container) {
-                // Re-render the treemap on resize
                 generateTreemap(fullMarketData, container);
             }
         }
     }, 250);
 });
 
-// For simplicity, defining the nameDictionary here as well, so it's accessible in renderStockDetailPage
 const nameDictionary = {
     'AAPL': '苹果', 'MSFT': '微软', 'GOOGL': '谷歌', 'AMZN': '亚马逊', 'NVDA': '英伟达',
     'TSLA': '特斯拉', 'META': 'Meta', 'BRK-B': '伯克希尔', 'LLY': '礼来', 'V': 'Visa',
