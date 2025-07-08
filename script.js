@@ -1,5 +1,5 @@
 const appContainer = document.getElementById('app-container');
-let fullMarketData = null; // 缓存全市场数据
+let fullMarketData = null; 
 
 // --- 路由系统 (保持不变) ---
 async function router() {
@@ -7,13 +7,9 @@ async function router() {
     const params = new URLSearchParams(window.location.search);
     const page = params.get('page');
     const symbol = params.get('symbol');
-    const sector = params.get('sector');
 
     if (page === 'stock' && symbol) {
         await renderStockDetailPage(symbol);
-    } else if (page === 'sector' && sector) {
-        // 对于全局Treemap，点击板块的逻辑需要重新设计，暂时先跳转回首页
-        await renderHomePage(); 
     } else {
         await renderHomePage();
     }
@@ -22,11 +18,7 @@ async function router() {
 // --- 页面渲染模块 ---
 
 function showLoading() {
-    appContainer.innerHTML = `
-        <div class="loading-indicator">
-            <div class="spinner"></div>
-            <p>数据加载中...</p>
-        </div>`;
+    appContainer.innerHTML = `<div class="loading-indicator"><div class="spinner"></div><p>数据加载中...</p></div>`;
 }
 
 async function renderHomePage() {
@@ -41,84 +33,64 @@ async function renderHomePage() {
         }
         
         appContainer.innerHTML = `
-            <header class="header">
-                <h1>股票热力图</h1>
-                <div class="data-source">标普500指数 (S&P 500)</div>
-            </header>
-            <main class="heatmap-container"></main> <!-- 渲染容器简化 -->
+            <header class="header"><h1>股票热力图</h1><div class="data-source">标普500指数 (S&P 500)</div></header>
+            <main class="heatmap-grid-container"></main> <!-- 使用新的容器类 -->
             <footer class="legend">
-                <!-- 图例保持不变 -->
                 <div class="legend-item"><div class="legend-color-box loss-strong"></div><span>< -2%</span></div>
                 <div class="legend-item"><div class="legend-color-box loss-medium"></div><span>-1%</span></div>
                 <div class="legend-item"><div class="legend-color-box flat"></div><span>0%</span></div>
                 <div class="legend-item"><div class="legend-color-box gain-medium"></div><span>+1%</span></div>
                 <div class="legend-item"><div class="legend-color-box gain-strong"></div><span>> +2%</span></div>
-            </footer>
-            `;
-        renderGlobalHeatmap(fullMarketData, appContainer.querySelector('.heatmap-container'));
+            </footer>`;
+        renderAdvancedHeatmap(fullMarketData, appContainer.querySelector('.heatmap-grid-container'));
     } catch (error) {
         appContainer.innerHTML = `<div class="loading-indicator">${error.message}</div>`;
     }
 }
 
-// **核心重构：渲染全局热力图**
-function renderGlobalHeatmap(allStocks, container) {
-    container.innerHTML = ''; // 清空容器
+// **核心重构：使用CSS Grid的先进布局**
+function renderAdvancedHeatmap(allStocks, container) {
+    container.innerHTML = '';
     
-    // 按市值降序排列所有股票
+    // 按市值降序排列
     allStocks.sort((a, b) => b.market_cap - a.market_cap);
-    
-    // 按板块对股票进行分组，以便后续为它们添加板块标签
-    const stocksBySector = groupDataBySector(allStocks);
 
-    // 渲染每个板块及其中的股票
-    for (const sectorName in stocksBySector) {
-        const sectorData = stocksBySector[sectorName];
+    // 动态计算每个股票的Grid跨度
+    const totalMarketCap = allStocks.reduce((sum, stock) => sum + stock.market_cap, 0);
+    const baseGridSize = 100; // 假设我们的网格有100x100个单元
+
+    allStocks.forEach(stock => {
+        const proportion = stock.market_cap / totalMarketCap;
+        // 简化的算法来决定跨度，保证大公司更大
+        const area = Math.max(proportion * baseGridSize * 5, 1); // 乘以一个系数放大差距，最小为1
+        const span = Math.round(Math.sqrt(area)); // 开方来得到大致的行列跨度
+
+        const stockLink = document.createElement('a');
+        stockLink.className = 'stock-link grid-view';
+        stockLink.href = `/?page=stock&symbol=${stock.ticker}`;
+        stockLink.onclick = (e) => navigate(e, stockLink.href);
+        // 通过CSS变量传递grid跨度
+        stockLink.style.setProperty('--grid-span', span);
+
+        const stockDiv = document.createElement('div');
+        const change = parseFloat(stock.change_percent);
+        stockDiv.className = `stock ${getColorClass(change)}`;
         
-        // 为每个股票创建DOM元素
-        sectorData.stocks.forEach(stock => {
-            const stockLink = document.createElement('a');
-            stockLink.className = 'stock-link global-view'; // 使用新的CSS类
-            stockLink.href = `/?page=stock&symbol=${stock.ticker}`;
-            stockLink.onclick = (e) => navigate(e, stockLink.href);
-            // flex-grow的值现在是全局比较的
-            stockLink.style.setProperty('--market-cap-weight', stock.market_cap); 
-
-            const stockDiv = document.createElement('div');
-            const change = parseFloat(stock.change_percent);
-            stockDiv.className = `stock ${getColorClass(change)}`;
-            
-            // 在方块内部显示板块名称
-            stockDiv.innerHTML = `
-                <span class="stock-sector-label">${sectorName}</span>
-                <span class="stock-ticker">${stock.ticker}</span>
-                <span class="stock-name-zh">${stock.name_zh}</span>
-                <span class="stock-change">${change >= 0 ? '+' : ''}${change ? change.toFixed(2) : '0.00'}%</span>`;
-            
-            stockLink.appendChild(stockDiv);
-            container.appendChild(stockLink); // 直接将股票方块添加到主容器
-        });
-    }
+        // **BUG修复**: 从stock对象里直接获取已翻译的sector
+        const sectorName = stock.sector || '其他';
+        
+        stockDiv.innerHTML = `
+            <span class="stock-sector-label">${sectorName}</span>
+            <span class="stock-ticker">${stock.ticker}</span>
+            <span class="stock-name-zh">${stock.name_zh}</span>
+            <span class="stock-change">${change >= 0 ? '+' : ''}${change ? change.toFixed(2) : '0.00'}%</span>`;
+        
+        stockLink.appendChild(stockDiv);
+        container.appendChild(stockLink);
+    });
 }
-
 
 // --- 保持不变的函数 ---
-
-// 修复行业名分组的bug
-function groupDataBySector(data) {
-    const grouped = data.reduce((acc, stock) => {
-        // 使用已翻译的sector字段进行分组
-        const sector = stock.sector || '其他'; 
-        if (!acc[sector]) acc[sector] = { stocks: [], total_market_cap: 0 };
-        acc[sector].stocks.push(stock);
-        acc[sector].total_market_cap += stock.market_cap;
-        return acc;
-    }, {});
-    // 排序是为了在渲染时，让大板块的股票先出现，视觉上更聚合
-    return Object.entries(grouped)
-        .sort(([, a], [, b]) => b.total_market_cap - a.total_market_cap)
-        .reduce((r, [k, v]) => ({ ...r, [k]: v }), {});
-}
 
 function getColorClass(change) {
     if (isNaN(change)) return 'flat';
@@ -140,6 +112,7 @@ function navigate(event, path) {
 async function renderStockDetailPage(symbol) {
     // 这个函数保持不变
     try {
+        showLoading(); // 添加加载提示
         const res = await fetch(`/api/stocks?ticker=${symbol}`);
         if (!res.ok) throw new Error('获取股票详情失败');
         const { profile, quote } = await res.json();
@@ -183,7 +156,6 @@ async function renderStockDetailPage(symbol) {
         appContainer.innerHTML = `<div class="loading-indicator">${error.message}</div>`;
     }
 }
-
 
 // --- 程序入口 ---
 window.addEventListener('popstate', router);

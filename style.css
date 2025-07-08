@@ -49,27 +49,27 @@ body {
 .spinner { border: 4px solid rgba(0, 0, 0, 0.1); border-radius: 50%; border-top: 4px solid var(--primary-blue); width: 36px; height: 36px; animation: spin 1s linear infinite; margin-bottom: 16px; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-/* --- 全局热力图样式 --- */
-.heatmap-container {
-    display: flex;
-    flex-wrap: wrap;
+/* --- 全新：CSS Grid 热力图布局 --- */
+.heatmap-grid-container {
+    display: grid;
+    /* 创建一个由许多小方格组成的网格，auto-fit会根据容器宽度自动决定列数 */
+    grid-template-columns: repeat(auto-fit, minmax(10px, 1fr));
+    grid-auto-rows: 10px; /* 定义每一行的高度 */
     gap: 3px;
-    width: 100%;
-    flex-grow: 1;
-    align-content: flex-start; /* 让内容从顶部开始填充 */
+    flex-grow: 1; /* 占据所有可用空间 */
+    height: 75vh; /* 给它一个固定的高度，让网格效果更好 */
 }
 
 /* 股票方块 */
-.stock-link.global-view {
+.stock-link.grid-view {
     text-decoration: none;
-    display: flex;
-    /* flex-grow 现在是全局比较的关键 */
-    flex-grow: var(--market-cap-weight, 1);
-    min-width: 60px; /* 保证小市值股票也能显示基本信息 */
-    min-height: 60px;
     position: relative;
+    /* 核心：让每个方块根据JS计算的span值，跨越对应的行列数 */
+    grid-column: span var(--grid-span, 1);
+    grid-row: span var(--grid-span, 1);
+    min-width: 0; /* 重置flexbox的min-width */
 }
-.stock-link.global-view:hover .stock {
+.stock-link.grid-view:hover .stock {
     box-shadow: 0 0 0 2px var(--primary-blue) inset; /* 悬停高亮 */
 }
 .stock {
@@ -83,9 +83,8 @@ body {
     justify-content: flex-start;
     align-items: flex-start;
     transition: box-shadow 0.2s ease;
-    overflow: hidden; /* 防止文字溢出 */
+    overflow: hidden;
 }
-/* 新增的板块标签样式 */
 .stock-sector-label {
     font-size: 10px;
     font-weight: 500;
@@ -93,7 +92,7 @@ body {
     padding: 1px 4px;
     border-radius: 2px;
     margin-bottom: 4px;
-    display: inline-block; /* 允许设置padding和margin */
+    display: inline-block;
 }
 .stock-ticker { font-size: 14px; font-weight: 700; }
 .stock-name-zh { font-size: 12px; font-weight: 400; opacity: 0.9; }
