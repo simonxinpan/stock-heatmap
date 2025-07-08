@@ -1,7 +1,7 @@
 const appContainer = document.getElementById('app-container');
 let fullMarketData = null; 
 
-// --- 路由系统 (保持不变) ---
+// --- 路由系统 ---
 async function router() {
     showLoading();
     const params = new URLSearchParams(window.location.search);
@@ -34,61 +34,95 @@ async function renderHomePage() {
         
         appContainer.innerHTML = `
             <header class="header"><h1>股票热力图</h1><div class="data-source">标普500指数 (S&P 500)</div></header>
-            <main class="heatmap-grid-container"></main> <!-- 使用新的容器类 -->
+            <main class="heatmap-container-v3"></main> <!-- 使用新的、最终版容器类 -->
             <footer class="legend">
                 <div class="legend-item"><div class="legend-color-box loss-strong"></div><span>< -2%</span></div>
                 <div class="legend-item"><div class="legend-color-box loss-medium"></div><span>-1%</span></div>
                 <div class="legend-item"><div class="legend-color-box flat"></div><span>0%</span></div>
                 <div class="legend-item"><div class="legend-color-box gain-medium"></div><span>+1%</span></div>
                 <div class="legend-item"><div class="legend-color-box gain-strong"></div><span>> +2%</span></div>
-            </footer>`;
-        renderAdvancedHeatmap(fullMarketData, appContainer.querySelector('.heatmap-grid-container'));
+            </footer>
+            `;
+        renderFinalHeatmap(fullMarketData, appContainer.querySelector('.heatmap-container-v3'));
     } catch (error) {
         appContainer.innerHTML = `<div class="loading-indicator">${error.message}</div>`;
     }
 }
 
-// **核心重构：使用CSS Grid的先进布局**
-function renderAdvancedHeatmap(allStocks, container) {
+// **最终版热力图渲染逻辑**
+function renderFinalHeatmap(allStocks, container) {
     container.innerHTML = '';
     
-    // 按市值降序排列
-    allStocks.sort((a, b) => b.market_cap - a.market_cap);
+    // 1. 按行业分组
+    const stocksBySector = groupDataBySector(allStocks);
 
-    // 动态计算每个股票的Grid跨度
-    const totalMarketCap = allStocks.reduce((sum, stock) => sum + stock.market_cap, 0);
-    const baseGridSize = 100; // 假设我们的网格有100x100个单元
+    // 2. 遍历每个板块并渲染
+    for (const sectorName in stocksBySector) {
+        const sectorData = stocksBySector[sectorName];
 
-    allStocks.forEach(stock => {
-        const proportion = stock.market_cap / totalMarketCap;
-        // 简化的算法来决定跨度，保证大公司更大
-        const area = Math.max(proportion * baseGridSize * 5, 1); // 乘以一个系数放大差距，最小为1
-        const span = Math.round(Math.sqrt(area)); // 开方来得到大致的行列跨度
+        // 创建板块容器
+        const sectorEl = document.createElement('div');
+        sectorEl.className = 'sector-v3';
+        // 板块的面积由其总市值决定
+        sectorEl.style.flexGrow = sectorData.total_market_cap;
 
-        const stockLink = document.createElement('a');
-        stockLink.className = 'stock-link grid-view';
-        stockLink.href = `/?page=stock&symbol=${stock.ticker}`;
-        stockLink.onclick = (e) => navigate(e, stockLink.href);
-        // 通过CSS变量传递grid跨度
-        stockLink.style.setProperty('--grid-span', span);
+        // 创建板块标题
+        const titleEl = document.createElement('h2');
+        titleEl.className = 'sector-title-v3';
+        titleEl.textContent = sectorName; // 直接使用已翻译的中文名
+        sectorEl.appendChild(titleEl);
 
-        const stockDiv = document.createElement('div');
-        const change = parseFloat(stock.change_percent);
-        stockDiv.className = `stock ${getColorClass(change)}`;
+        // 创建板块内的股票容器
+        const stockContainerEl = document.createElement('div');
+        stockContainerEl.className = 'stock-container-v3';
         
-        // **BUG修复**: 从stock对象里直接获取已翻译的sector
-        const sectorName = stock.sector || '其他';
-        
-        stockDiv.innerHTML = `
-            <span class="stock-sector-label">${sectorName}</span>
-            <span class="stock-ticker">${stock.ticker}</span>
-            <span class="stock-name-zh">${stock.name_zh}</span>
-            <span class="stock-change">${change >= 0 ? '+' : ''}${change ? change.toFixed(2) : '0.00'}%</span>`;
-        
-        stockLink.appendChild(stockDiv);
-        container.appendChild(stockLink);
-    });
+        // 渲染板块内的每只股票
+        sectorData.stocks.forEach(stock => {
+            const stockLink = document.createElement('a');
+            stockLink.className = 'stock-link-v3';
+            stockLink.href = `/?page=stock&symbol=${stock.ticker}`;
+            stockLink.onclick = (e) => navigate(e, stockLink.href);
+            // 股票在板块内的面积由其市值决定
+            stockLink.style.flexGrow = stock.market_cap;
+
+            const stockDiv = document.createElement('div');
+            const change = parseFloat(stock.change_percent);
+            stockDiv.className = `stock ${getColorClass(change)}`;
+            
+            stockDiv.innerHTML = `
+                <span class="stock-ticker">${stock.ticker}</span>
+                <span class="stock-name-zh">${stock.name_zh}</span>
+                <span class="stock-change">${change >= 0 ? '+' : ''}${change ? change.toFixed(2) : '0.00'}%</span>`;
+            
+            stockLink.appendChild(stockDiv);
+            stockContainerEl.appendChild(stockLink);
+        });
+
+        sectorEl.appendChild(stockContainerEl);
+        container.appendChild(sectorEl);
+    }
 }
+
+
+// **BUG修复：按中文行业名分组**
+function groupDataBySector(data) {
+    const grouped = data.reduce((acc, stock) => {
+        // 使用已翻译的sector字段进行分组
+        const sector = stock.sector || '其他'; 
+        if (!acc[sector]) {
+            acc[sector] = { stocks: [], total_market_cap: 0 };
+        }
+        acc[sector].stocks.push(stock);
+        acc[sector].total_market_cap += stock.market_cap;
+        return acc;
+    }, {});
+    
+    // 按板块总市值排序
+    return Object.entries(grouped)
+        .sort(([, a], [, b]) => b.total_market_cap - a.total_market_cap)
+        .reduce((r, [k, v]) => ({ ...r, [k]: v }), {});
+}
+
 
 // --- 保持不变的函数 ---
 
@@ -110,9 +144,9 @@ function navigate(event, path) {
 }
 
 async function renderStockDetailPage(symbol) {
-    // 这个函数保持不变
+    // 省略，与上一版完全相同
     try {
-        showLoading(); // 添加加载提示
+        showLoading();
         const res = await fetch(`/api/stocks?ticker=${symbol}`);
         if (!res.ok) throw new Error('获取股票详情失败');
         const { profile, quote } = await res.json();

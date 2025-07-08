@@ -49,28 +49,48 @@ body {
 .spinner { border: 4px solid rgba(0, 0, 0, 0.1); border-radius: 50%; border-top: 4px solid var(--primary-blue); width: 36px; height: 36px; animation: spin 1s linear infinite; margin-bottom: 16px; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-/* --- 全新：CSS Grid 热力图布局 --- */
-.heatmap-grid-container {
-    display: grid;
-    /* 创建一个由许多小方格组成的网格，auto-fit会根据容器宽度自动决定列数 */
-    grid-template-columns: repeat(auto-fit, minmax(10px, 1fr));
-    grid-auto-rows: 10px; /* 定义每一行的高度 */
+/* --- 最终版热力图布局 --- */
+.heatmap-container-v3 {
+    display: flex;
+    flex-wrap: wrap; /* 允许板块换行 */
     gap: 3px;
+    width: 100%;
     flex-grow: 1; /* 占据所有可用空间 */
-    height: 75vh; /* 给它一个固定的高度，让网格效果更好 */
+    height: 75vh;
 }
-
-/* 股票方块 */
-.stock-link.grid-view {
+.sector-v3 {
+    display: flex;
+    flex-direction: column; /* 标题在上，股票在下 */
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    overflow: hidden;
+    /* flex-grow由板块总市值决定，实现板块间的面积比例 */
+    min-width: 20%; /* 保证小板块不会被挤得太窄 */
+}
+.sector-title-v3 {
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 8px;
+    background-color: var(--header-bg);
+    margin: 0;
+}
+.stock-container-v3 {
+    display: flex;
+    flex-wrap: wrap; /* 允许股票在板块内换行 */
+    flex-grow: 1; /* 占据板块内所有剩余空间 */
+    padding: 3px;
+    gap: 3px;
+}
+.stock-link-v3 {
     text-decoration: none;
+    display: flex;
+    /* flex-grow由个股市值决定，实现股票间的面积比例 */
+    min-width: 50px;
+    min-height: 50px;
     position: relative;
-    /* 核心：让每个方块根据JS计算的span值，跨越对应的行列数 */
-    grid-column: span var(--grid-span, 1);
-    grid-row: span var(--grid-span, 1);
-    min-width: 0; /* 重置flexbox的min-width */
 }
-.stock-link.grid-view:hover .stock {
-    box-shadow: 0 0 0 2px var(--primary-blue) inset; /* 悬停高亮 */
+.stock-link-v3:hover .stock {
+    box-shadow: 0 0 0 2px var(--primary-blue) inset;
 }
 .stock {
     width: 100%;
@@ -85,32 +105,22 @@ body {
     transition: box-shadow 0.2s ease;
     overflow: hidden;
 }
-.stock-sector-label {
-    font-size: 10px;
-    font-weight: 500;
-    background-color: rgba(0, 0, 0, 0.2);
-    padding: 1px 4px;
-    border-radius: 2px;
-    margin-bottom: 4px;
-    display: inline-block;
-}
 .stock-ticker { font-size: 14px; font-weight: 700; }
 .stock-name-zh { font-size: 12px; font-weight: 400; opacity: 0.9; }
 .stock-change { position: absolute; bottom: 6px; right: 6px; font-size: 13px; font-weight: 500; }
 
-/* 颜色定义 (保持不变) */
+/* 颜色定义 */
 .gain-strong { background-color: var(--gain-strong); } .gain-medium { background-color: var(--gain-medium); } .gain-weak { background-color: var(--gain-weak); }
 .loss-strong { background-color: var(--loss-strong); } .loss-medium { background-color: var(--loss-medium); } .loss-weak { background-color: var(--loss-weak); }
 .flat { background-color: var(--flat-bg); color: var(--flat-text); }
-.flat .stock-sector-label { background-color: rgba(0, 0, 0, 0.08); }
 .flat .stock-change { color: var(--flat-text); }
 
-/* 图例 (保持不变) */
+/* 图例 */
 .legend { background-color: var(--header-bg); border: 1px solid var(--border-color); border-radius: 4px; margin-top: 12px; padding: 8px; display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 12px; }
 .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; }
 .legend-color-box { width: 14px; height: 14px; border-radius: 2px; }
 
-/* 个股详情页 (保持不变) */
+/* 个股详情页 */
 .stock-detail-page { display: flex; gap: 20px; max-width: 1400px; margin: auto; width: 100%;}
 .stock-detail-page .main-content { flex-grow: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .stock-detail-page .right-sidebar { flex-basis: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 20px; }
