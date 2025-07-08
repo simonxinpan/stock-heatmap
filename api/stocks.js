@@ -1,29 +1,50 @@
 import { Redis } from '@upstash/redis';
 
 // --- 配置 ---
-// *** 终极必-杀技：再次更新缓存键，确保Vercel无法使用任何旧缓存！***
-const CACHE_KEY = 'stock_heatmap_data_v-mission-complete'; 
+// *** 最终破解：使用全新的缓存键，确保旧数据被彻底清除 ***
+const CACHE_KEY = 'stock_heatmap_data_v-case-cracked'; 
 const CACHE_TTL_SECONDS = 300; // 缓存5分钟
 
-// 明确指定环境变量，确保连接到正确的数据库
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
   token: process.env.KV_REST_API_TOKEN,
 });
 
-// --- 中英文字典 ---
+// --- 中英文字典 (扩充完整版) ---
 const sectorDictionary = {
-    "Communication Services": "通讯服务",
+    // GICS Sector Level
+    "Energy": "能源",
+    "Materials": "原材料",
+    "Industrials": "工业",
     "Consumer Discretionary": "非必需消费品",
     "Consumer Staples": "必需消费品",
-    "Energy": "能源",
-    "Financials": "金融",
     "Health Care": "医疗健康",
-    "Industrials": "工业",
+    "Financials": "金融",
     "Information Technology": "信息技术",
-    "Materials": "原材料",
-    "Real Estate": "房地产",
+    "Communication Services": "通讯服务",
     "Utilities": "公用事业",
+    "Real Estate": "房地产",
+
+    // Finnhub 可能返回的更详细的行业名 (补充)
+    "Automobiles & Components": "汽车与零部件",
+    "Banks": "银行",
+    "Capital Goods": "资本品",
+    "Commercial & Professional Services": "商业与专业服务",
+    "Diversified Financials": "多元化金融",
+    "Food & Staples Retailing": "食品与必需品零售",
+    "Food, Beverage & Tobacco": "食品、饮料与烟草",
+    "Health Care Equipment & Services": "医疗保健设备与服务",
+    "Household & Personal Products": "家庭与个人用品",
+    "Insurance": "保险",
+    "Media & Entertainment": "媒体与娱乐",
+    "Pharmaceuticals, Biotechnology & Life Sciences": "制药、生物科技与生命科学",
+    "Retailing": "零售业",
+    "Semiconductors & Semiconductor Equipment": "半导体与设备",
+    "Software & Services": "软件与服务",
+    "Technology Hardware & Equipment": "技术硬件与设备",
+    "Telecommunication Services": "电信服务",
+    "Transportation": "交通运输",
+    "Hotels, Restaurants & Leisure": "酒店、餐厅与休闲", // 补充截图中的行业
 };
 
 const nameDictionary = {
@@ -141,7 +162,7 @@ async function fetchApiDataForTicker(ticker) {
 async function fetchSingleStockData(ticker) {
     const apiKey = process.env.FINNHUB_API_KEY;
     if (!apiKey) throw new Error('FINNHUB_API_KEY is not configured.');
-    // ... (rest of the function is unchanged and correct)
+
     const fetchFromFinnhub = async (endpoint) => {
         const url = `https://finnhub.io/api/v1${endpoint}&token=${apiKey}`;
         const res = await fetch(url);
