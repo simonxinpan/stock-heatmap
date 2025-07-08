@@ -23,13 +23,15 @@ body {
     margin: 0;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow: hidden; /* 防止resize时出现滚动条 */
 }
 
 #app-container {
     padding: 12px;
     display: flex;
     flex-direction: column;
-    min-height: calc(100vh - 24px);
+    height: calc(100vh - 24px); /* 让应用撑满整个视口 */
+    box-sizing: border-box;
 }
 
 /* --- 通用头部 --- */
@@ -40,6 +42,7 @@ body {
     padding-bottom: 12px;
     border-bottom: 1px solid var(--border-color);
     margin-bottom: 12px;
+    flex-shrink: 0; /* 防止头部被压缩 */
 }
 .header h1 { font-size: 22px; margin: 0; font-weight: 500; }
 .header .data-source { font-size: 14px; color: var(--text-secondary); }
@@ -49,60 +52,56 @@ body {
 .spinner { border: 4px solid rgba(0, 0, 0, 0.1); border-radius: 50%; border-top: 4px solid var(--primary-blue); width: 36px; height: 36px; animation: spin 1s linear infinite; margin-bottom: 16px; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-/* --- 最终版热力图布局 --- */
-.heatmap-container-v3 {
-    display: flex;
-    flex-wrap: wrap; /* 允许板块换行 */
-    gap: 3px;
+/* --- JS驱动的Treemap布局 --- */
+.heatmap-container-final {
+    position: relative;
     width: 100%;
-    flex-grow: 1; /* 占据所有可用空间 */
-    height: 75vh;
-}
-.sector-v3 {
-    display: flex;
-    flex-direction: column; /* 标题在上，股票在下 */
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
+    flex-grow: 1;
     overflow: hidden;
-    /* flex-grow由板块总市值决定，实现板块间的面积比例 */
-    min-width: 20%; /* 保证小板块不会被挤得太窄 */
 }
-.sector-title-v3 {
+
+.treemap-sector {
+    position: absolute;
+    box-sizing: border-box;
+    border: 2px solid var(--background-color);
+    overflow: hidden;
+    background-color: var(--header-bg);
+}
+
+.treemap-title {
     font-size: 13px;
     font-weight: 500;
-    padding: 6px 8px;
-    background-color: var(--header-bg);
+    color: var(--text-primary);
+    padding: 4px 6px;
     margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
-.stock-container-v3 {
-    display: flex;
-    flex-wrap: wrap; /* 允许股票在板块内换行 */
-    flex-grow: 1; /* 占据板块内所有剩余空间 */
-    padding: 3px;
-    gap: 3px;
-}
-.stock-link-v3 {
+
+.treemap-stock {
+    position: absolute;
+    box-sizing: border-box;
     text-decoration: none;
-    display: flex;
-    /* flex-grow由个股市值决定，实现股票间的面积比例 */
-    min-width: 50px;
-    min-height: 50px;
-    position: relative;
+    border: 1px solid var(--background-color);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-.stock-link-v3:hover .stock {
-    box-shadow: 0 0 0 2px var(--primary-blue) inset;
+.treemap-stock:hover {
+    transform: scale(1.02);
+    box-shadow: 0 0 10px rgba(0,0,0,0.4);
+    z-index: 10;
 }
+
 .stock {
     width: 100%;
     height: 100%;
     display: flex;
     flex-direction: column;
     padding: 6px;
-    border-radius: 3px;
+    border-radius: 2px;
     color: #fff;
     justify-content: flex-start;
     align-items: flex-start;
-    transition: box-shadow 0.2s ease;
     overflow: hidden;
 }
 .stock-ticker { font-size: 14px; font-weight: 700; }
@@ -116,12 +115,12 @@ body {
 .flat .stock-change { color: var(--flat-text); }
 
 /* 图例 */
-.legend { background-color: var(--header-bg); border: 1px solid var(--border-color); border-radius: 4px; margin-top: 12px; padding: 8px; display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 12px; }
+.legend { background-color: var(--header-bg); border-top: 1px solid var(--border-color); margin-top: 12px; padding: 8px; display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 12px; flex-shrink: 0;}
 .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; }
 .legend-color-box { width: 14px; height: 14px; border-radius: 2px; }
 
 /* 个股详情页 */
-.stock-detail-page { display: flex; gap: 20px; max-width: 1400px; margin: auto; width: 100%;}
+.stock-detail-page { display: flex; gap: 20px; max-width: 1400px; margin: auto; width: 100%; flex-grow: 1; overflow-y: auto;}
 .stock-detail-page .main-content { flex-grow: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .stock-detail-page .right-sidebar { flex-basis: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 20px; }
 .card { background-color: var(--header-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 20px; }
