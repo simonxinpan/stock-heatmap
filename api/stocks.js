@@ -1,12 +1,17 @@
 import { Redis } from '@upstash/redis';
 
 // --- 配置 ---
-const CACHE_KEY = 'stock_heatmap_data_v3.1'; // 更新缓存键以强制刷新
+const CACHE_KEY = 'stock_heatmap_data_v-final-fix'; // 再次更新缓存键，确保万无一失
 const CACHE_TTL_SECONDS = 300; // 缓存5分钟
 
-const redis = Redis.fromEnv(); 
+// *** 关键修正：不再使用 fromEnv()，而是明确指定环境变量 ***
+// 这样可以确保代码能正确找到Vercel提供的数据库密钥
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+});
 
-// --- 中英文字典 (这是翻译的核心) ---
+// --- 中英文字典 ---
 const sectorDictionary = {
     "Communication Services": "通讯服务",
     "Consumer Discretionary": "非必需消费品",
@@ -56,11 +61,17 @@ export default async function handler(request, response) {
 
 // --- 辅助函数 ---
 async function fetchHeatmapData() {
-    let cachedData = await redis.get(CACHE_KEY);
-    if (cachedData) {
-        console.log("Serving heatmap data from Upstash Redis cache.");
-        return cachedData;
+    try {
+        let cachedData = await redis.get(CACHE_KEY);
+        if (cachedData) {
+            console.log("Serving heatmap data from Upstash Redis cache.");
+            return cachedData;
+        }
+    } catch (e) {
+        console.error("Redis GET error:", e.message);
+        // 如果redis读取失败，不影响继续执行，直接去获取新数据
     }
+
 
     console.log("Cache miss. Fetching fresh data with batching strategy.");
     const tickers = Object.keys(nameDictionary);
@@ -82,8 +93,13 @@ async function fetchHeatmapData() {
     }
 
     if (allStockData.length > 0) {
-        await redis.set(CACHE_KEY, allStockData, { ex: CACHE_TTL_SECONDS });
-        console.log(`Fetched and stored ${allStockData.length} stocks in cache.`);
+        try {
+            await redis.set(CACHE_KEY, allStockData, { ex: CACHE_TTL_SECONDS });
+            console.log(`Fetched and stored ${allStockData.length} stocks in cache.`);
+        } catch(e) {
+            console.error("Redis SET error:", e.message);
+            // 即使写入缓存失败，也应该返回数据给用户
+        }
     }
     return allStockData;
 }
@@ -108,14 +124,13 @@ async function fetchApiDataForTicker(ticker) {
         if (!profile || !quote || typeof profile.marketCapitalization === 'undefined' || profile.marketCapitalization === 0) return null;
         
         const englishSector = profile.finnhubIndustry;
-        // *** 关键的翻译步骤 ***
         const chineseSector = sectorDictionary[englishSector] || englishSector;
         const chineseName = nameDictionary[ticker] || profile.name.split(' ')[0];
 
         return { 
             ticker, 
             name_zh: chineseName, 
-            sector: chineseSector, // <-- 确保这里返回的是中文行业名
+            sector: chineseSector, 
             market_cap: profile.marketCapitalization, 
             change_percent: quote.dp,
             logo: profile.logo
