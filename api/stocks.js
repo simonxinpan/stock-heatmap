@@ -1,11 +1,11 @@
 import { Redis } from '@upstash/redis';
 
 // --- 配置 ---
-const CACHE_KEY = 'stock_heatmap_data_v-final-fix'; // 再次更新缓存键，确保万无一失
+// *** 终极必-杀技：再次更新缓存键，确保Vercel无法使用任何旧缓存！***
+const CACHE_KEY = 'stock_heatmap_data_v-mission-complete'; 
 const CACHE_TTL_SECONDS = 300; // 缓存5分钟
 
-// *** 关键修正：不再使用 fromEnv()，而是明确指定环境变量 ***
-// 这样可以确保代码能正确找到Vercel提供的数据库密钥
+// 明确指定环境变量，确保连接到正确的数据库
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
   token: process.env.KV_REST_API_TOKEN,
@@ -69,9 +69,7 @@ async function fetchHeatmapData() {
         }
     } catch (e) {
         console.error("Redis GET error:", e.message);
-        // 如果redis读取失败，不影响继续执行，直接去获取新数据
     }
-
 
     console.log("Cache miss. Fetching fresh data with batching strategy.");
     const tickers = Object.keys(nameDictionary);
@@ -98,7 +96,6 @@ async function fetchHeatmapData() {
             console.log(`Fetched and stored ${allStockData.length} stocks in cache.`);
         } catch(e) {
             console.error("Redis SET error:", e.message);
-            // 即使写入缓存失败，也应该返回数据给用户
         }
     }
     return allStockData;
@@ -144,7 +141,7 @@ async function fetchApiDataForTicker(ticker) {
 async function fetchSingleStockData(ticker) {
     const apiKey = process.env.FINNHUB_API_KEY;
     if (!apiKey) throw new Error('FINNHUB_API_KEY is not configured.');
-
+    // ... (rest of the function is unchanged and correct)
     const fetchFromFinnhub = async (endpoint) => {
         const url = `https://finnhub.io/api/v1${endpoint}&token=${apiKey}`;
         const res = await fetch(url);
