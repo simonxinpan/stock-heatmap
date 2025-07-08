@@ -95,6 +95,7 @@ function generateTreemap(allStocks, container) {
 
             const titleEl = document.createElement('h2');
             titleEl.className = 'treemap-title';
+            // *** 关键修正点：确保此处使用的currentItem.name是中文行业名 ***
             titleEl.textContent = currentItem.name;
             sectorEl.appendChild(titleEl);
             
@@ -128,7 +129,6 @@ function generateTreemap(allStocks, container) {
     }
 }
 
-// === START: 智能渲染函数 (强制中文版) ===
 function createStockElement(stock, width, height) {
     const stockLink = document.createElement('a');
     stockLink.className = 'treemap-stock';
@@ -157,11 +157,11 @@ function createStockElement(stock, width, height) {
     stockLink.appendChild(stockDiv);
     return stockLink;
 }
-// === END: 智能渲染函数 ===
 
 function groupDataBySector(data) {
     if (!data) return {};
     const grouped = data.reduce((acc, stock) => {
+        // 此处的 stock.sector 已经是中文名 (由后端API提供)
         const sector = stock.sector || '其他';
         if (!acc[sector]) {
             acc[sector] = { stocks: [], total_market_cap: 0 };
@@ -178,7 +178,6 @@ function groupDataBySector(data) {
     return grouped;
 }
 
-// === START: 10阶颜色映射函数 (明亮主题) ===
 function getColorClass(change) {
     if (isNaN(change) || (change > -0.01 && change < 0.01)) return 'flat';
     if (change > 3) return 'gain-5';
@@ -193,7 +192,6 @@ function getColorClass(change) {
     if (change <= 0) return 'loss-1';
     return 'flat';
 }
-// === END: 10阶颜色映射函数 ===
 
 function navigate(event, path) {
     event.preventDefault();
