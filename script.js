@@ -2,7 +2,6 @@ const appContainer = document.getElementById('app-container');
 let fullMarketData = null; // 缓存全市场数据
 
 // --- 路由系统 ---
-// 页面加载或浏览器历史变化时，决定显示哪个页面
 async function router() {
     showLoading();
     const params = new URLSearchParams(window.location.search);
@@ -21,7 +20,6 @@ async function router() {
 
 // --- 页面渲染模块 ---
 
-// 渲染加载动画
 function showLoading() {
     appContainer.innerHTML = `
         <div class="loading-indicator">
@@ -30,30 +28,30 @@ function showLoading() {
         </div>`;
 }
 
-// 1. 渲染主页
 async function renderHomePage() {
     try {
         if (!fullMarketData) {
-            fullMarketData = await fetch('/api/stocks');
-            if (!fullMarketData.ok) throw new Error('Failed to fetch market data');
-            fullMarketData = await fullMarketData.json();
+            const res = await fetch('/api/stocks');
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || '获取市场数据失败');
+            }
+            fullMarketData = await res.json();
         }
         const groupedData = groupDataBySector(fullMarketData);
         appContainer.innerHTML = `
             <header class="header">
                 <h1>股票热力图</h1>
-                <div class="data-source">美股发发发</div>
+                <div class="data-source">标普500指数 (S&P 500)</div>
             </header>
             <div class="heatmap-page-container">
                 <main class="heatmap-container"></main>
                 <footer class="legend">
-                    <div class="legend-item"><span>跌幅</span></div>
                     <div class="legend-item"><div class="legend-color-box loss-strong"></div><span>< -2%</span></div>
                     <div class="legend-item"><div class="legend-color-box loss-medium"></div><span>-1%</span></div>
                     <div class="legend-item"><div class="legend-color-box flat"></div><span>0%</span></div>
                     <div class="legend-item"><div class="legend-color-box gain-medium"></div><span>+1%</span></div>
                     <div class="legend-item"><div class="legend-color-box gain-strong"></div><span>> +2%</span></div>
-                    <div class="legend-item"><span>涨幅</span></div>
                 </footer>
             </div>`;
         renderHeatmap(groupedData, appContainer.querySelector('.heatmap-container'));
@@ -62,14 +60,13 @@ async function renderHomePage() {
     }
 }
 
-// 2. 渲染板块页
 async function renderSectorPage(sectorName) {
      try {
         if (!fullMarketData) {
             fullMarketData = await fetch('/api/stocks').then(res => res.json());
         }
-        const sectorData = fullMarketData.filter(stock => stock.sector === sectorName);
-        const groupedData = { [sectorName]: { stocks: sectorData, total_market_cap: sectorData.reduce((acc, s) => acc + s.market_cap, 0) } };
+        const sectorData = fullMarketData.filter(stock => stock.sector === decodeURIComponent(sectorName));
+        const groupedData = { [decodeURIComponent(sectorName)]: { stocks: sectorData, total_market_cap: sectorData.reduce((acc, s) => acc + s.market_cap, 0) } };
         
         appContainer.innerHTML = `
             <header class="header">
@@ -85,11 +82,10 @@ async function renderSectorPage(sectorName) {
     }
 }
 
-// 3. 渲染个股详情页
 async function renderStockDetailPage(symbol) {
     try {
         const res = await fetch(`/api/stocks?ticker=${symbol}`);
-        if (!res.ok) throw new Error('Failed to fetch stock detail');
+        if (!res.ok) throw new Error('获取股票详情失败');
         const { profile, quote } = await res.json();
         
         const change = quote.dp;
@@ -132,10 +128,6 @@ async function renderStockDetailPage(symbol) {
     }
 }
 
-
-// --- 渲染辅助函数 ---
-
-// 渲染热力图的通用函数
 function renderHeatmap(groupedData, container) {
     container.innerHTML = ''; 
     for (const sectorName in groupedData) {
@@ -170,7 +162,7 @@ function renderHeatmap(groupedData, container) {
             stockDiv.innerHTML = `
                 <span class="stock-ticker">${stock.ticker}</span>
                 <span class="stock-name-zh">${stock.name_zh}</span>
-                <span class="stock-change">${change >= 0 ? '+' : ''}${change.toFixed(2)}%</span>`;
+                <span class="stock-change">${change >= 0 ? '+' : ''}${change ? change.toFixed(2) : '0.00'}%</span>`;
             stockLink.appendChild(stockDiv);
             stockContainerEl.appendChild(stockLink);
         });
@@ -193,23 +185,21 @@ function groupDataBySector(data) {
 }
 
 function getColorClass(change) {
+    if (isNaN(change)) return 'flat';
     if (change > 2) return 'gain-strong';
-    if (change > 0.5) return 'gain-medium';
-    if (change > 0) return 'gain-weak';
+    if (change > 1) return 'gain-medium';
+    if (change > 0.2) return 'gain-weak';
     if (change < -2) return 'loss-strong';
-    if (change < -0.5) return 'loss-medium';
-    if (change < 0) return 'loss-weak';
+    if (change < -1) return 'loss-medium';
+    if (change < -0.2) return 'loss-weak';
     return 'flat';
 }
 
-
-// --- SPA导航函数 ---
 function navigate(event, path) {
     event.preventDefault();
     window.history.pushState({}, '', path);
     router();
 }
 
-// --- 程序入口 ---
-window.addEventListener('popstate', router); // 监听浏览器前进/后退
-document.addEventListener('DOMContentLoaded', router); // 首次加载
+window.addEventListener('popstate', router);
+document.addEventListener('DOMContentLoaded', router);

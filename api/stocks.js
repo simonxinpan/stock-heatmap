@@ -1,62 +1,130 @@
 import { Redis } from '@upstash/redis';
 
 // --- 配置 ---
-const CACHE_KEY = 'stock_heatmap_data';
+const CACHE_KEY = 'stock_heatmap_data_v2.1'; // 更新缓存键以强制刷新
 const CACHE_TTL_SECONDS = 300; // 缓存5分钟
 
-// --- 初始化Redis客户端 ---
 const redis = Redis.fromEnv(); 
+
+// --- 中英文字典 ---
+const sectorDictionary = {
+    "Communication Services": "通讯服务",
+    "Consumer Discretionary": "非必需消费品",
+    "Consumer Staples": "必需消费品",
+    "Energy": "能源",
+    "Financials": "金融",
+    "Health Care": "医疗健康",
+    "Industrials": "工业",
+    "Information Technology": "信息技术",
+    "Materials": "原材料",
+    "Real Estate": "房地产",
+    "Utilities": "公用事业",
+};
+
+const nameDictionary = {
+    'AAPL': '苹果', 'MSFT': '微软', 'GOOGL': '谷歌', 'AMZN': '亚马逊', 'NVDA': '英伟达',
+    'TSLA': '特斯拉', 'META': 'Meta', 'BRK-B': '伯克希尔', 'LLY': '礼来', 'V': 'Visa',
+    'JPM': '摩根大通', 'XOM': '埃克森美孚', 'WMT': '沃尔玛', 'UNH': '联合健康', 'MA': '万事达',
+    'JNJ': '强生', 'PG': '宝洁', 'ORCL': '甲骨文', 'HD': '家得宝', 'AVGO': '博通',
+    'MRK': '默克', 'CVX': '雪佛龙', 'PEP': '百事', 'COST': '好市多', 'ADBE': 'Adobe',
+    'KO': '可口可乐', 'BAC': '美国银行', 'CRM': '赛富时', 'MCD': "麦当劳", 'PFE': '辉瑞',
+    'NFLX': '奈飞', 'AMD': '超威半导体', 'DIS': '迪士尼', 'INTC': '英特尔', 'NKE': '耐克',
+    'CAT': '卡特彼勒', 'BA': '波音', 'CSCO': '思科', 'T': 'AT&T', 'UBER': '优步',
+    'PYPL': 'PayPal', 'QCOM': '高通', 'SBUX': '星巴克', 'IBM': 'IBM', 'GE': '通用电气',
+    'F': '福特汽车', 'GM': '通用汽车', 'DAL': '达美航空', 'UAL': '联合航空', 'AAL': '美国航空',
+    'MAR': '万豪国际', 'HLT': '希尔顿', 'BKNG': '缤客', 'EXPE': '亿客行', 'CCL': '嘉年华邮轮'
+};
 
 // --- 主处理函数 ---
 export default async function handler(request, response) {
-    // 从请求URL中获取参数
     const { searchParams } = new URL(request.url, `https://${request.headers.host}`);
     const ticker = searchParams.get('ticker');
 
     try {
         if (ticker) {
-            // --- 场景A: 请求单支股票详情 (不使用缓存) ---
-            console.log(`INFO: Fetching details for single stock: ${ticker}`);
             const data = await fetchSingleStockData(ticker);
             return response.status(200).json(data);
         } else {
-            // --- 场景B: 请求热力图数据 (使用缓存) ---
-            console.log("INFO: Fetching heatmap data.");
             const data = await fetchHeatmapData();
             return response.status(200).json(data);
         }
     } catch (error) {
-        console.error(`FATAL: Unhandled error in API handler for request: ${request.url}`, error);
+        console.error(`API Handler Error:`, error);
         return response.status(500).json({ error: error.message || 'An internal server error occurred.' });
     }
 }
 
+// --- 辅助函数 ---
 
-// --- 辅助函数1: 获取热力图数据 (带缓存) ---
 async function fetchHeatmapData() {
-    // 1. 尝试从缓存获取
     let cachedData = await redis.get(CACHE_KEY);
     if (cachedData) {
-        console.log("SUCCESS: Serving heatmap data from Upstash Redis cache.");
+        console.log("Serving heatmap data from Upstash Redis cache.");
         return cachedData;
     }
 
-    // 2. 缓存未命中，从Finnhub获取
-    console.log("INFO: Heatmap cache miss. Fetching fresh data from Finnhub...");
-    const tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META', 'JPM', 'V', 'JNJ', 'XOM', 'PG', 'LLY', 'AVGO', 'HD', 'MA'];
-    
-    const stockPromises = tickers.map(t => fetchApiDataForTicker(t));
-    const freshData = (await Promise.all(stockPromises)).filter(Boolean);
+    console.log("Cache miss. Fetching fresh data with batching strategy.");
+    const tickers = Object.keys(nameDictionary);
+    const batchSize = 15;
+    const delay = 2000;
+    let allStockData = [];
 
-    // 3. 存入缓存
-    if (freshData.length > 0) {
-        await redis.set(CACHE_KEY, freshData, { ex: CACHE_TTL_SECONDS });
-        console.log(`SUCCESS: Fetched and stored ${freshData.length} stocks in Upstash Redis cache.`);
+    for (let i = 0; i < tickers.length; i += batchSize) {
+        const batch = tickers.slice(i, i + batchSize);
+        console.log(`Fetching batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(tickers.length / batchSize)}...`);
+        
+        const batchPromises = batch.map(t => fetchApiDataForTicker(t));
+        const batchResult = (await Promise.all(batchPromises)).filter(Boolean);
+        allStockData.push(...batchResult);
+        
+        if (i + batchSize < tickers.length) {
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
     }
-    return freshData;
+
+    if (allStockData.length > 0) {
+        await redis.set(CACHE_KEY, allStockData, { ex: CACHE_TTL_SECONDS });
+        console.log(`Fetched and stored ${allStockData.length} stocks in cache.`);
+    }
+    return allStockData;
 }
 
-// --- 辅助函数2: 获取单支股票数据 (不带缓存) ---
+async function fetchApiDataForTicker(ticker) {
+    try {
+        const apiKey = process.env.FINNHUB_API_KEY;
+        if (!apiKey) throw new Error('FINNHUB_API_KEY is not configured.');
+
+        const fetchFromFinnhub = async (endpoint) => {
+            const url = `https://finnhub.io/api/v1${endpoint}&token=${apiKey}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`Finnhub API error for ${url}: ${res.statusText}`);
+            return res.json();
+        };
+
+        const [profile, quote] = await Promise.all([
+            fetchFromFinnhub(`/stock/profile2?symbol=${ticker}`),
+            fetchFromFinnhub(`/quote?symbol=${ticker}`)
+        ]);
+
+        if (!profile || !quote || typeof profile.marketCapitalization === 'undefined') return null;
+        
+        const englishSector = profile.finnhubIndustry;
+        const chineseSector = sectorDictionary[englishSector] || englishSector;
+        const chineseName = nameDictionary[ticker] || profile.name.split(' ')[0];
+
+        return { 
+            ticker, 
+            name_zh: chineseName, 
+            sector: chineseSector, 
+            market_cap: profile.marketCapitalization, 
+            change_percent: quote.dp 
+        };
+    } catch (error) {
+        console.error(`Error fetching data for ticker ${ticker}:`, error);
+        return null;
+    }
+}
+
 async function fetchSingleStockData(ticker) {
     const apiKey = process.env.FINNHUB_API_KEY;
     if (!apiKey) throw new Error('FINNHUB_API_KEY is not configured.');
@@ -74,30 +142,4 @@ async function fetchSingleStockData(ticker) {
     ]);
     
     return { profile, quote };
-}
-
-// --- 辅助函数3: 获取单个ticker的API数据 (用于热力图) ---
-async function fetchApiDataForTicker(ticker) {
-     try {
-        const apiKey = process.env.FINNHUB_API_KEY;
-        if (!apiKey) throw new Error('FINNHUB_API_KEY is not configured.');
-
-        const fetchFromFinnhub = async (endpoint) => {
-            const url = `https://finnhub.io/api/v1${endpoint}&token=${apiKey}`;
-            const res = await fetch(url);
-            if (!res.ok) throw new Error(`Finnhub API error for ${url}: ${res.statusText}`);
-            return res.json();
-        };
-
-        const [profile, quote] = await Promise.all([
-            fetchFromFinnhub(`/stock/profile2?symbol=${ticker}`),
-            fetchFromFinnhub(`/quote?symbol=${ticker}`)
-        ]);
-
-        if (!profile || !quote || typeof profile.marketCapitalization === 'undefined') return null;
-        return { ticker, name_zh: profile.name.split(' ')[0], sector: profile.finnhubIndustry, market_cap: profile.marketCapitalization, change_percent: quote.dp };
-    } catch (error) {
-        console.error(`Error fetching data for ticker ${ticker}:`, error);
-        return null; // 单个失败不影响其他
-    }
 }
