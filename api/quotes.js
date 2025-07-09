@@ -1,8 +1,5 @@
 // /api/quotes.js
 
-// Vercel环境下，我们不需要额外的body-parser，可以直接使用request.json()
-// 但为了兼容本地开发和确保健壮性，我们采用最通用的方式
-
 export default async function handler(request, response) {
     if (request.method !== 'POST') {
         return response.status(405).json({ error: 'Method Not Allowed' });
@@ -32,11 +29,12 @@ export default async function handler(request, response) {
         
         const quotes = await Promise.all(quotePromises);
         
+        // 允许跨域请求，以防万一
+        response.setHeader('Access-Control-Allow-Origin', '*');
         return response.status(200).json(quotes);
 
     } catch (error) {
         console.error('Error in /api/quotes:', error);
-        // 返回更详细的错误信息，方便调试
         return response.status(500).json({ 
             error: 'Failed to fetch real-time quotes.',
             details: error.message 
