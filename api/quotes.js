@@ -1,6 +1,5 @@
-// 这个文件只负责获取并返回最新的报价数据，非常轻量且不使用缓存
+// /api/quotes.js
 export default async function handler(request, response) {
-    // 检查请求方法，确保是POST
     if (request.method !== 'POST') {
         return response.status(405).json({ error: 'Method Not Allowed' });
     }
@@ -11,7 +10,6 @@ export default async function handler(request, response) {
     }
 
     try {
-        // 从请求体中获取需要查询的股票代码列表
         const { tickers } = request.body;
         if (!tickers || !Array.isArray(tickers) || tickers.length === 0) {
             return response.status(400).json({ error: 'Tickers array is required in the request body.' });
@@ -23,7 +21,7 @@ export default async function handler(request, response) {
                     if (!res.ok) throw new Error(`Finnhub API error for ${ticker}: ${res.statusText}`);
                     return res.json();
                 })
-                .then(quote => ({ ticker, dp: quote.dp })) // 只返回需要的字段：代码和日涨跌幅
+                .then(quote => ({ ticker, dp: quote.dp }))
         );
         
         const quotes = await Promise.all(quotePromises);

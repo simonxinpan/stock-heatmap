@@ -7,18 +7,8 @@
     --text-secondary: #5f6368;
     --text-white: #ffffff;
     --primary-blue: #1a73e8;
-
-    /* "霓虹灯" 10阶涨跌颜色体系 - 对比度更强 */
-    --gain-5: #00c853; /* > 3% 亮绿色 */
-    --gain-4: #1b5e20; /* > 2% 深绿色 */
-    --gain-3: #4caf50; /* > 1% 标准绿 */
-    --gain-2: #a5d6a7; /* > 0.25% 浅绿 */
-    --gain-1: #e8f5e9; /* > 0% 极浅绿 */
-    --loss-1: #ffebee; /* < 0% 极浅红 */
-    --loss-2: #ff8a80; /* < -0.25% 浅红 */
-    --loss-3: #f44336; /* < -1% 标准红 */
-    --loss-4: #d32f2f; /* < -2% 深红 */
-    --loss-5: #b71c1c; /* < -3% 暗红色 */
+    --gain-5: #00c853; --gain-4: #1b5e20; --gain-3: #4caf50; --gain-2: #a5d6a7; --gain-1: #e8f5e9;
+    --loss-1: #ffebee; --loss-2: #ff8a80; --loss-3: #f44336; --loss-4: #d32f2f; --loss-5: #b71c1c;
     --flat-bg: #f1f3f4; --flat-text: #3c4043;
 }
 body { background-color: var(--background-color); color: var(--text-primary); font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif; margin: 0; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; overflow: hidden; }
@@ -36,13 +26,7 @@ body { background-color: var(--background-color); color: var(--text-primary); fo
 .treemap-title-link:hover .treemap-title { background-color: #e8eaed; }
 .treemap-stock { position: absolute; box-sizing: border-box; text-decoration: none; border: 1px solid var(--background-color); transition: outline 0.1s ease-out; }
 .treemap-stock:hover { outline: 2px solid var(--primary-blue); z-index: 10; }
-
-.stock {
-    width: 100%; height: 100%; display: flex; flex-direction: column; padding: 6px; overflow: hidden;
-    position: relative; justify-content: flex-start; align-items: flex-start; text-align: left;
-    /* *** 核心动画属性！ *** */
-    transition: background-color 0.8s ease-in-out;
-}
+.stock { width: 100%; height: 100%; display: flex; flex-direction: column; padding: 6px; overflow: hidden; position: relative; justify-content: flex-start; align-items: flex-start; text-align: left; transition: background-color 0.8s ease-in-out; }
 .stock.gain-1, .stock.loss-1 { color: var(--text-primary); }
 .stock.flat { color: var(--flat-text); }
 .stock:not(.gain-1):not(.loss-1):not(.flat) { color: var(--text-white); }
@@ -55,10 +39,8 @@ body { background-color: var(--background-color); color: var(--text-primary); fo
 .detail-sm .stock-ticker { font-size: 12px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
 .detail-sm .stock-name-zh, .detail-sm .stock-change { display: none; }
 .detail-xs .stock-ticker, .detail-xs .stock-name-zh, .detail-xs .stock-change { display: none; }
-.gain-5 { background-color: var(--gain-5); } .gain-4 { background-color: var(--gain-4); } .gain-3 { background-color: var(--gain-3); }
-.gain-2 { background-color: var(--gain-2); } .gain-1 { background-color: var(--gain-1); }
-.loss-1 { background-color: var(--loss-1); } .loss-2 { background-color: var(--loss-2); } .loss-3 { background-color: var(--loss-3); }
-.loss-4 { background-color: var(--loss-4); } .loss-5 { background-color: var(--loss-5); }
+.gain-5 { background-color: var(--gain-5); } .gain-4 { background-color: var(--gain-4); } .gain-3 { background-color: var(--gain-3); } .gain-2 { background-color: var(--gain-2); } .gain-1 { background-color: var(--gain-1); }
+.loss-1 { background-color: var(--loss-1); } .loss-2 { background-color: var(--loss-2); } .loss-3 { background-color: var(--loss-3); } .loss-4 { background-color: var(--loss-4); } .loss-5 { background-color: var(--loss-5); }
 .flat { background-color: var(--flat-bg); }
 .legend { background-color: var(--header-bg); border-top: 1px solid var(--border-color); margin-top: 12px; padding: 10px; display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 15px; flex-shrink: 0;}
 .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; }
@@ -66,32 +48,27 @@ body { background-color: var(--background-color); color: var(--text-primary); fo
 .demo-button { background-color: var(--primary-blue); color: white; border: none; padding: 8px 16px; font-size: 14px; border-radius: 4px; cursor: pointer; margin-left: 20px; }
 .demo-button:hover { background-color: #185abc; }
 .demo-button.active { background-color: var(--gain-3); }
-/* (所有详情页样式保持不变) */
 .stock-detail-page { display: flex; gap: 20px; max-width: 1400px; margin: auto; width: 100%; flex-grow: 1; overflow-y: auto; flex-wrap: wrap; }
-.stock-detail-page .main-content, .stock-detail-page .right-sidebar { flex: 1 1 320px; display: flex; flex-direction: column; gap: 20px; min-width: 320px; }
+.stock-detail-page .main-content { flex-grow: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; } .stock-detail-page .right-sidebar { flex-basis: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 20px; }
 .card { background-color: var(--background-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
 .card-title { font-size: 18px; font-weight: 500; color: var(--text-primary); margin: 0 0 15px 0; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); }
 a.back-link { color: var(--primary-blue); text-decoration: none; font-size: 14px; font-weight: 500; display: inline-block; }
-.stock-detail-page .stock-header, .stock-detail-page .stock-identity { display: flex; align-items: center; }
-.stock-detail-page .stock-header { justify-content: space-between; flex-wrap: wrap; gap: 15px; }
-.stock-detail-page .stock-identity { gap: 15px; }
+.stock-detail-page .stock-header { display: flex; justify-content: space-between; align-items: center; } .stock-detail-page .stock-identity { display: flex; align-items: center; gap: 15px; }
 .stock-detail-page .stock-logo { width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--border-color); }
-.stock-detail-page .stock-name h1, .current-price { font-size: 24px; font-weight: 500; margin: 0; }
-.stock-detail-page .stock-name p { margin: 2px 0 0 0; font-size: 14px; color: var(--text-secondary); }
+.stock-detail-page .stock-name h1 { font-size: 24px; font-weight: 500; margin: 0; } .stock-detail-page .stock-name p { margin: 2px 0 0 0; font-size: 14px; color: var(--text-secondary); }
 .stock-detail-page .stock-price-info { text-align: right; }
+.current-price { font-size: 28px; font-weight: 500; }
 .price-change.gain { color: var(--gain-3); } .price-change.loss { color: var(--loss-3); }
 .market-status { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
 .chart-section { border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; }
 .chart-toolbar { display: flex; gap: 15px; padding: 8px 12px; border-bottom: 1px solid var(--border-color); background-color: var(--header-bg); }
-.chart-toolbar a { text-decoration: none; color: var(--text-secondary); font-size: 13px; padding: 4px 8px; border-radius: 4px; }
-.chart-toolbar a.active, .chart-toolbar a:hover { background-color: #e8eaed; }
+.chart-toolbar a { text-decoration: none; color: var(--text-secondary); font-size: 13px; padding: 4px 8px; border-radius: 4px; } .chart-toolbar a:hover { background-color: #e8eaed; }
+.chart-toolbar a.active { background-color: var(--primary-blue); color: #fff; font-weight: 500; }
 .chart-svg-container { position: relative; padding: 10px 40px 30px 10px; background-color: var(--background-color); }
 .right-sidebar .btn-group { display: flex; gap: 10px; margin-bottom: 20px; }
 .right-sidebar .btn { flex: 1; padding: 10px; font-size: 15px; font-weight: 500; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-.right-sidebar .btn.sell { background-color: var(--loss-3); }
-.right-sidebar .btn.buy { background-color: var(--gain-3); }
+.right-sidebar .btn.sell { background-color: var(--loss-3); } .right-sidebar .btn.buy { background-color: var(--gain-3); }
 .right-sidebar .summary-item { display: flex; justify-content: space-between; font-size: 14px; padding: 10px 0; border-bottom: 1px solid #e8eaed; }
 .right-sidebar .summary-item:last-child { border-bottom: none; }
-.right-sidebar .summary-item .label { color: var(--text-secondary); }
-.right-sidebar .summary-item .value { font-weight: 500; }
+.right-sidebar .summary-item .label { color: var(--text-secondary); } .right-sidebar .summary-item .value { font-weight: 500; }
 .right-sidebar .summary-item .value a { color: var(--primary-blue); text-decoration: none; }
