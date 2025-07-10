@@ -2,7 +2,7 @@ const appContainer = document.getElementById('app-container');
 let clientDataCache = {}; 
 let currentView = { type: 'homepage', key: 'homepage' }; 
 
-// --- 路由和数据控制中心 ---
+// --- 路由和数据控制中心 (无修改) ---
 async function router() {
     showLoading();
     const params = new URLSearchParams(window.location.search);
@@ -18,7 +18,6 @@ async function router() {
         currentView = { type: 'sector', key: decodedSector };
         
         if (clientDataCache[decodedSector]) {
-            // 【修正2: 从缓存数据中获取中文名】
             const cachedData = clientDataCache[decodedSector];
             const chineseSectorName = cachedData.length > 0 ? cachedData[0].sector : decodedSector;
             document.title = `${chineseSectorName} - 行业热力图`;
@@ -33,7 +32,6 @@ async function router() {
                 const sectorData = await res.json();
                 clientDataCache[decodedSector] = sectorData;
                 
-                // 【修正2: 从新获取的数据中获取中文名】
                 const chineseSectorName = sectorData.length > 0 ? sectorData[0].sector : decodedSector;
                 document.title = `${chineseSectorName} - 行业热力图`;
                 renderHomePage(sectorData, chineseSectorName);
@@ -69,7 +67,6 @@ function showLoading() {
     appContainer.innerHTML = `<div class="loading-indicator"><div class="spinner"></div><p>数据加载中...</p></div>`;
 }
 
-// 现在的 sectorName 参数将总是中文名
 function renderHomePage(dataToRender, sectorName = null) {
     let headerHtml;
 
@@ -110,7 +107,8 @@ function renderHomePage(dataToRender, sectorName = null) {
     }, 0);
 }
 
-// --- Treemap布局算法和渲染 ---
+
+// --- 【重大修正: 全新、稳定、经典的Treemap布局算法】 ---
 function generateTreemap(data, container, groupIntoSectors = true) {
     container.innerHTML = '';
     const { clientWidth: totalWidth, clientHeight: totalHeight } = container;
@@ -124,7 +122,7 @@ function generateTreemap(data, container, groupIntoSectors = true) {
         // 首页全景图逻辑
         const stocksBySector = groupDataBySector(data);
         const totalMarketCap = Object.values(stocksBySector).reduce((sum, sector) => sum + sector.total_market_cap, 0);
-        const capRatio = 0.12;
+        const capRatio = 0.12; 
         const capValue = totalMarketCap * capRatio;
 
         itemsToLayout = Object.entries(stocksBySector).map(([englishSectorName, sectorData]) => ({
@@ -137,9 +135,7 @@ function generateTreemap(data, container, groupIntoSectors = true) {
     } else {
         // 行业视图逻辑
         const totalMarketCap = data.reduce((sum, stock) => sum + stock.market_cap, 0);
-        
-        // 【修正3: 龙头面积进一步压缩】
-        const capRatio = 0.22; // 行业页：单只股票面积上限从 25% 调整为 22%
+        const capRatio = 0.22;
         const capValue = totalMarketCap * capRatio;
 
         itemsToLayout = data.map(s => ({ 
@@ -148,129 +144,75 @@ function generateTreemap(data, container, groupIntoSectors = true) {
         })).sort((a,b) => b.value - a.value);
     }
     
-    // 【修正1: 使用全新的、更稳健的布局算法】
-    squarify(container, itemsToLayout, totalWidth, totalHeight, groupIntoSectors);
+    // 调用全新的、稳健的布局函数
+    layout(itemsToLayout, 0, 0, totalWidth, totalHeight, container, groupIntoSectors);
 }
 
-// --- 【修正1: 全新的、迭代式Squarified Treemap算法】 ---
-function squarify(container, children, width, height, isSectorLevel) {
-    const totalValue = children.reduce((sum, child) => sum + child.value, 0);
-
-    function layout(nodes, x, y, w, h) {
-        if (!nodes || nodes.length === 0) return;
-
-        // 标准化节点值
-        const total = nodes.reduce((sum, node) => sum + node.value, 0);
-        if (total <= 0) return;
-        nodes.forEach(node => node.normalizedValue = node.value / total * w * h);
-
-        nodes.sort((a, b) => b.normalizedValue - a.normalizedValue);
-        
-        letcurrentRow = [];
-        let remainingNodes = [...nodes];
-
-        while (remainingNodes.length > 0) {
-            const isHorizontal = w > h;
-            const side = isHorizontal ? h : w;
-            const row = findBestRow(remainingNodes, side);
-            
-            const rowValue = row.reduce((sum, node) => sum + node.normalizedValue, 0);
-            const rowLength = rowValue / side;
-            
-            let currentX = x;
-            let currentY = y;
-
-            for (const node of row) {
-                const nodeLength = node.normalizedValue / rowLength;
-                const nodeRect = {
-                    x: isHorizontal ? currentX : x,
-                    y: isHorizontal ? y : currentY,
-                    w: isHorizontal ? nodeLength : rowLength,
-                    h: isHorizontal ? rowLength : nodeLength,
-                };
-                
-                renderNode(container, node, nodeRect, isSectorLevel);
-
-                if(isHorizontal) currentX += nodeLength;
-                else currentY += nodeLength;
-            }
-
-            if(isHorizontal) {
-                y += rowLength;
-                h -= rowLength;
-            } else {
-                x += rowLength;
-                w -= rowLength;
-            }
-            
-            remainingNodes = remainingNodes.slice(row.length);
-        }
+function layout(items, x, y, width, height, parentElement, isSectorLevel) {
+    if (!items || items.length === 0 || width <= 0 || height <= 0) {
+        return;
     }
 
-    function findBestRow(nodes, side) {
-        let bestRow = [nodes[0]];
-        let remaining = nodes.slice(1);
-        if (remaining.length === 0) return bestRow;
-
-        let bestRatio = worstAspectRatio(bestRow, side);
-
-        for (let i = 1; i <= remaining.length; i++) {
-            const currentRow = nodes.slice(0, i + 1);
-            const currentRatio = worstAspectRatio(currentRow, side);
-            if (currentRatio <= bestRatio) {
-                bestRatio = currentRatio;
-                bestRow = currentRow;
-            } else {
-                break;
-            }
-        }
-        return bestRow;
-    }
-
-    function worstAspectRatio(row, side) {
-        const sum = row.reduce((s, node) => s + node.normalizedValue, 0);
-        const sum_sq = sum * sum;
-        const side_sq = side * side;
-        let max = 0;
-        let min = Infinity;
-        for(const node of row) {
-             if (node.normalizedValue > max) max = node.normalizedValue;
-             if (node.normalizedValue < min) min = node.normalizedValue;
-        }
-        return Math.max(
-            (side_sq * max) / sum_sq,
-            sum_sq / (side_sq * min)
-        );
-    }
+    const totalValue = items.reduce((sum, item) => sum + item.value, 0);
+    if (totalValue <= 0) return;
     
-    layout(children, 0, 0, width, height);
-}
+    // 决定是水平分割还是垂直分割
+    const isHorizontal = width > height;
+    
+    let currentPos = isHorizontal ? x : y;
 
-function renderNode(parentEl, node, rect, isSectorLevel) {
-     if (isSectorLevel) {
-        const sectorEl = document.createElement('div');
-        sectorEl.className = 'treemap-sector';
-        sectorEl.style.left = `${rect.x}px`;
-        sectorEl.style.top = `${rect.y}px`;
-        sectorEl.style.width = `${rect.w}px`;
-        sectorEl.style.height = `${rect.h}px`;
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const itemProportion = item.value / totalValue;
+        
+        const remainingValue = items.slice(i).reduce((sum, it) => sum + it.value, 0);
+        const remainingProportion = item.value / remainingValue;
+        
+        const remainingWidth = isHorizontal ? width - (currentPos - x) : width;
+        const remainingHeight = isHorizontal ? height : height - (currentPos - y);
 
-        const titleLink = document.createElement('a');
-        titleLink.className = 'treemap-title-link';
-        titleLink.href = `/?sector=${encodeURIComponent(node.original_name)}`;
-        titleLink.onclick = (e) => navigate(e, titleLink.href);
-        titleLink.innerHTML = `<h2 class="treemap-title">${node.name}</h2>`; // 使用 node.name (中文名)
-        sectorEl.appendChild(titleLink);
-        parentEl.appendChild(sectorEl);
+        const itemWidth = isHorizontal ? remainingWidth * remainingProportion : remainingWidth;
+        const itemHeight = isHorizontal ? remainingHeight : remainingHeight * remainingProportion;
 
-        const titleHeight = titleLink.offsetHeight > 0 ? titleLink.offsetHeight : 28;
-        // 递归调用 squarify 布局行业内部
-        squarify(sectorEl, node.items, rect.w - 4, rect.h - titleHeight - 4, false);
-    } else {
-        const stockEl = createStockElement(node, rect.w, rect.h);
-        stockEl.style.left = `${rect.x}px`;
-        stockEl.style.top = `${rect.y}px`;
-        parentEl.appendChild(stockEl);
+        const itemX = isHorizontal ? currentPos : x;
+        const itemY = isHorizontal ? y : currentPos;
+        
+        if (isSectorLevel) {
+            // 渲染行业板块
+            const sectorEl = document.createElement('div');
+            sectorEl.className = 'treemap-sector';
+            sectorEl.style.left = `${itemX}px`;
+            sectorEl.style.top = `${itemY}px`;
+            sectorEl.style.width = `${itemWidth}px`;
+            sectorEl.style.height = `${itemHeight}px`;
+
+            const titleLink = document.createElement('a');
+            titleLink.className = 'treemap-title-link';
+            titleLink.href = `/?sector=${encodeURIComponent(item.original_name)}`;
+            titleLink.onclick = (e) => navigate(e, titleLink.href);
+            titleLink.innerHTML = `<h2 class="treemap-title">${item.name}</h2>`;
+            sectorEl.appendChild(titleLink);
+            parentElement.appendChild(sectorEl);
+
+            const titleHeight = titleLink.offsetHeight > 0 ? titleLink.offsetHeight : 28;
+            
+            // 递归调用 layout 布局行业内部的股票
+            if (item.items && item.items.length > 0) {
+                layout(item.items, 0, titleHeight, itemWidth - 4, itemHeight - titleHeight - 4, sectorEl, false);
+            }
+        } else {
+            // 渲染个股方块
+            const stockEl = createStockElement(item, itemWidth, itemHeight);
+            stockEl.style.left = `${itemX}px`;
+            stockEl.style.top = `${itemY}px`;
+            parentElement.appendChild(stockEl);
+        }
+        
+        if (isHorizontal) {
+            currentPos += itemWidth;
+        } else {
+            currentPos += itemHeight;
+        }
     }
 }
 // --- 算法修正结束 ---
