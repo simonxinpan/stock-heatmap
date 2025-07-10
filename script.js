@@ -116,32 +116,32 @@ function generateTreemap(data, container, groupIntoSectors = true) {
         // 首页全景图逻辑
         const stocksBySector = groupDataBySector(data);
         const totalMarketCap = Object.values(stocksBySector).reduce((sum, sector) => sum + sector.total_market_cap, 0);
-        const capRatio = 0.15; // 首页：单个行业板块面积上限为15%
+        
+        // 【修正2: 龙头面积进一步压缩】
+        const capRatio = 0.12; // 首页：单个行业板块面积上限从 15% 调整为 12%
         const capValue = totalMarketCap * capRatio;
 
-        itemsToLayout = Object.entries(stocksBySector).map(([sectorName, sectorData]) => ({
-            name: sectorName,
+        itemsToLayout = Object.entries(stocksBySector).map(([englishSectorName, sectorData]) => ({
+            name: sectorData.chinese_name, // 【修正1: 使用中文名显示】
             value: Math.min(sectorData.total_market_cap, capValue),
-            original_name: sectorData.original_name, 
+            original_name: englishSectorName, // 英文名现在作为 original_name
             items: sectorData.stocks.map(s => ({ ...s, value: s.market_cap }))
         })).sort((a, b) => b.value - a.value);
 
     } else {
-        // 【修正2: 行业龙头面积上限】开始
-        // 这是行业视图的逻辑
+        // 行业视图逻辑
         const totalMarketCap = data.reduce((sum, stock) => sum + stock.market_cap, 0);
-        const capRatio = 0.35; // 行业页：单只股票面积上限为35%，您可以调整这个值
+        
+        // 【修正2: 龙头面积进一步压缩】
+        const capRatio = 0.25; // 行业页：单只股票面积上限从 35% 调整为 25%
         const capValue = totalMarketCap * capRatio;
 
         itemsToLayout = data.map(s => ({ 
             ...s, 
             value: Math.min(s.market_cap, capValue) 
         })).sort((a,b) => b.value - a.value);
-        // 【修正2: 行业龙头面积上限】结束
     }
     
-    // 【修正1: 使用更稳健的布局算法】
-    // 调用全新的、修正后的布局函数
     layout({
         items: itemsToLayout,
         x: 0, y: 0,
@@ -149,12 +149,11 @@ function generateTreemap(data, container, groupIntoSectors = true) {
     }, container, groupIntoSectors);
 }
 
-// --- 【修正1: 全新的、更稳健的布局算法】 ---
+// --- 稳健的布局算法 (无修改) ---
 function layout(area, parentEl, isSectorLevel) {
     let items = area.items;
     if (!items.length) return;
 
-    // 按价值降序排列
     items.sort((a, b) => b.value - a.value);
 
     const totalValue = items.reduce((sum, item) => sum + item.value, 0);
@@ -164,7 +163,6 @@ function layout(area, parentEl, isSectorLevel) {
     let line = [];
     let lineValue = 0;
     
-    // 找到最佳分割点
     let i = 0;
     for (i = 0; i < items.length; i++) {
         const newItem = items[i];
@@ -176,8 +174,6 @@ function layout(area, parentEl, isSectorLevel) {
 
         const newLine = [...line, newItem];
         const newLineValue = lineValue + newItem.value;
-
-        // 计算当前行和新行的长宽比
         const currentRatio = calculateAspectRatio(line, lineValue, isHorizontal ? area.height : area.width);
         const newRatio = calculateAspectRatio(newLine, newLineValue, isHorizontal ? area.height : area.width);
 
@@ -185,25 +181,22 @@ function layout(area, parentEl, isSectorLevel) {
             line.push(newItem);
             lineValue = newLineValue;
         } else {
-            break; // 找到分割点
+            break; 
         }
     }
 
     const currentLine = items.slice(0, i);
     const remainingItems = items.slice(i);
     const currentLineValue = currentLine.reduce((sum, item) => sum + item.value, 0);
-
     const lineAreaRatio = currentLineValue / totalValue;
     const lineLength = isHorizontal ? area.width * lineAreaRatio : area.height * lineAreaRatio;
 
     let subArea;
     if (isHorizontal) {
-        // 水平分割，垂直排列
         subArea = { items: currentLine, x: area.x, y: area.y, width: lineLength, height: area.height };
         area.x += lineLength;
         area.width -= lineLength;
     } else {
-        // 垂直分割，水平排列
         subArea = { items: currentLine, x: area.x, y: area.y, width: area.width, height: lineLength };
         area.y += lineLength;
         area.height -= lineLength;
@@ -243,16 +236,14 @@ function renderLine(area, parentEl, isSectorLevel) {
             titleLink.className = 'treemap-title-link';
             titleLink.href = `/?sector=${encodeURIComponent(item.original_name)}`;
             titleLink.onclick = (e) => navigate(e, titleLink.href);
-            titleLink.innerHTML = `<h2 class="treemap-title">${item.name}</h2>`;
+            titleLink.innerHTML = `<h2 class="treemap-title">${item.name}</h2>`; // 使用 item.name (现在是中文名)
             sectorEl.appendChild(titleLink);
             parentEl.appendChild(sectorEl);
 
-            const titleHeight = titleLink.offsetHeight > 0 ? titleLink.offsetHeight : 28;
-            // 递归调用 layout 布局行业内部
             layout({
                 items: item.items,
-                x: 0, y: titleHeight,
-                width: width - 4, height: height - titleHeight - 4
+                x: 0, y: titleLink.offsetHeight > 0 ? titleLink.offsetHeight : 28,
+                width: width - 4, height: height - (titleLink.offsetHeight > 0 ? titleLink.offsetHeight : 28) - 4
             }, sectorEl, false);
         } else {
             const stockEl = createStockElement(item, width, height);
@@ -267,16 +258,18 @@ function renderLine(area, parentEl, isSectorLevel) {
 
 function calculateAspectRatio(line, lineValue, sideLength) {
     if (!line.length || lineValue <= 0) return Infinity;
-    const totalArea = sideLength * (lineValue / line.reduce((s,i) => s + i.value, lineValue)); // This is an approximation
+    const totalArea = sideLength * sideLength * (lineValue / line.reduce((s,i) => s + i.value, lineValue));
     let maxRatio = 0;
     line.forEach(item => {
         const itemArea = (item.value / lineValue) * totalArea;
-        const ratio = Math.max(sideLength/itemArea, itemArea/sideLength);
-        if (ratio > maxRatio) maxRatio = ratio;
+        if(itemArea > 0){
+            const ratio = Math.max(sideLength * sideLength / itemArea, itemArea / (sideLength * sideLength));
+            if (ratio > maxRatio) maxRatio = ratio;
+        }
     });
     return maxRatio;
 }
-// --- 算法修正结束 ---
+// --- 算法结束 ---
 
 function createStockElement(stock, width, height) {
     const stockLink = document.createElement('a');
@@ -299,15 +292,21 @@ function createStockElement(stock, width, height) {
     return stockLink;
 }
 
+// 【修正1: 修改分组逻辑以支持中英文名】
 function groupDataBySector(data) {
     if (!data) return {};
+    // 我们将按 original_sector (英文名) 分组，以确保键的稳定性
     return data.reduce((acc, stock) => {
-        const sector = stock.sector || '其他';
-        if (!acc[sector]) {
-            acc[sector] = { stocks: [], total_market_cap: 0, original_name: stock.original_sector };
+        const key = stock.original_sector || '其他';
+        if (!acc[key]) {
+            acc[key] = { 
+                stocks: [], 
+                total_market_cap: 0, 
+                chinese_name: stock.sector // 将第一个遇到的中文名作为该组的中文名
+            };
         }
-        acc[sector].stocks.push(stock);
-        acc[sector].total_market_cap += stock.market_cap;
+        acc[key].stocks.push(stock);
+        acc[key].total_market_cap += stock.market_cap;
         return acc;
     }, {});
 }
