@@ -2,7 +2,7 @@ const appContainer = document.getElementById('app-container');
 let clientDataCache = {}; 
 let currentView = { type: 'homepage', key: 'homepage' }; 
 
-// --- 路由和数据控制中心 ---
+// --- 路由和数据控制中心 (无修改) ---
 async function router() {
     showLoading();
     const params = new URLSearchParams(window.location.search);
@@ -14,7 +14,6 @@ async function router() {
         currentView = { type: 'detail', key: symbol };
         await renderStockDetailPage(symbol);
     } else if (sector) {
-        // 使用 decodeURIComponent 解码从 URL 获取的行业名称
         const decodedSector = decodeURIComponent(sector);
         currentView = { type: 'sector', key: decodedSector };
         document.title = `${decodedSector} - 行业热力图`;
@@ -23,7 +22,6 @@ async function router() {
             renderHomePage(clientDataCache[decodedSector], decodedSector);
         } else {
             try {
-                // 在请求 API 时，确保 sector 参数是正确编码的
                 const res = await fetch(`/api/stocks?sector=${encodeURIComponent(decodedSector)}`);
                 if (!res.ok) {
                      const errorData = await res.json();
@@ -59,7 +57,7 @@ async function router() {
     }
 }
 
-// --- 页面渲染模块 ---
+// --- 页面渲染模块 (无修改) ---
 function showLoading() {
     appContainer.innerHTML = `<div class="loading-indicator"><div class="spinner"></div><p>数据加载中...</p></div>`;
 }
@@ -82,11 +80,11 @@ function renderHomePage(dataToRender, sectorName = null) {
             ${headerHtml}
             <main id="heatmap-container-final" class="heatmap-container-final"></main>
             <footer class="legend">
-                <div class="legend-item"><div class="legend-color-box loss-5"></div><span class="legend-text">< -3%</span></div>
-                <div class="legend-item"><div class="legend-color-box loss-3"></div><span class="legend-text">-1%</span></div>
-                <div class="legend-item"><div class="legend-color-box flat"></div><span class="legend-text">0%</span></div>
-                <div class="legend-item"><div class="legend-color-box gain-3"></div><span class="legend-text">+1%</span></div>
-                <div class="legend-item"><div class="legend-color-box gain-5"></div><span class="legend-text">> +3%</span></div>
+                <div class="legend-item"><div class="legend-color-box loss-5"></div></div>
+                <div class="legend-item"><div class="legend-color-box loss-3"></div></div>
+                <div class="legend-item"><div class="legend-color-box flat"></div></div>
+                <div class="legend-item"><div class="legend-color-box gain-3"></div></div>
+                <div class="legend-item"><div class="legend-color-box gain-5"></div></div>
             </footer>
         </div>
     `;
@@ -115,9 +113,10 @@ function generateTreemap(data, container, groupIntoSectors = true) {
 
     let itemsToLayout;
     if (groupIntoSectors) {
+        // 首页全景图逻辑
         const stocksBySector = groupDataBySector(data);
         const totalMarketCap = Object.values(stocksBySector).reduce((sum, sector) => sum + sector.total_market_cap, 0);
-        const capRatio = 0.15;
+        const capRatio = 0.15; // 首页：单个行业板块面积上限为15%
         const capValue = totalMarketCap * capRatio;
 
         itemsToLayout = Object.entries(stocksBySector).map(([sectorName, sectorData]) => ({
@@ -126,73 +125,122 @@ function generateTreemap(data, container, groupIntoSectors = true) {
             original_name: sectorData.original_name, 
             items: sectorData.stocks.map(s => ({ ...s, value: s.market_cap }))
         })).sort((a, b) => b.value - a.value);
+
     } else {
-        itemsToLayout = data.map(s => ({ ...s, value: s.market_cap })).sort((a,b) => b.market_cap - a.market_cap);
+        // 【修正2: 行业龙头面积上限】开始
+        // 这是行业视图的逻辑
+        const totalMarketCap = data.reduce((sum, stock) => sum + stock.market_cap, 0);
+        const capRatio = 0.35; // 行业页：单只股票面积上限为35%，您可以调整这个值
+        const capValue = totalMarketCap * capRatio;
+
+        itemsToLayout = data.map(s => ({ 
+            ...s, 
+            value: Math.min(s.market_cap, capValue) 
+        })).sort((a,b) => b.value - a.value);
+        // 【修正2: 行业龙头面积上限】结束
     }
     
-    squarify(itemsToLayout, { x: 0, y: 0, width: totalWidth, height: totalHeight }, container, groupIntoSectors);
+    // 【修正1: 使用更稳健的布局算法】
+    // 调用全新的、修正后的布局函数
+    layout({
+        items: itemsToLayout,
+        x: 0, y: 0,
+        width: totalWidth, height: totalHeight
+    }, container, groupIntoSectors);
 }
 
-function squarify(items, rect, parentEl, isSectorLevel) {
+// --- 【修正1: 全新的、更稳健的布局算法】 ---
+function layout(area, parentEl, isSectorLevel) {
+    let items = area.items;
     if (!items.length) return;
 
-    let row = [];
-    let i = 0;
-    const isHorizontal = rect.width >= rect.height;
-    const side = isHorizontal ? rect.height : rect.width;
+    // 按价值降序排列
+    items.sort((a, b) => b.value - a.value);
 
-    while (i < items.length) {
-        const item = items[i];
-        const newRow = [...row, item];
-        if (row.length === 0 || worst(row, side) >= worst(newRow, side)) {
-            row.push(item);
-            i++;
+    const totalValue = items.reduce((sum, item) => sum + item.value, 0);
+    if (totalValue <= 0) return;
+
+    const isHorizontal = area.width >= area.height;
+    let line = [];
+    let lineValue = 0;
+    
+    // 找到最佳分割点
+    let i = 0;
+    for (i = 0; i < items.length; i++) {
+        const newItem = items[i];
+        if (line.length === 0) {
+            line.push(newItem);
+            lineValue += newItem.value;
+            continue;
+        }
+
+        const newLine = [...line, newItem];
+        const newLineValue = lineValue + newItem.value;
+
+        // 计算当前行和新行的长宽比
+        const currentRatio = calculateAspectRatio(line, lineValue, isHorizontal ? area.height : area.width);
+        const newRatio = calculateAspectRatio(newLine, newLineValue, isHorizontal ? area.height : area.width);
+
+        if (newRatio < currentRatio) {
+            line.push(newItem);
+            lineValue = newLineValue;
         } else {
-            break;
+            break; // 找到分割点
         }
     }
 
-    const rowValue = row.reduce((sum, item) => sum + item.value, 0);
-    const totalValue = items.reduce((sum, item) => sum + item.value, 0);
-    const rowSize = (rowValue / totalValue) * (isHorizontal ? rect.width : rect.height);
-    
-    let rowRect;
-    if (isHorizontal) {
-        rowRect = { x: rect.x, y: rect.y, width: rowSize, height: rect.height };
-        rect.x += rowSize;
-        rect.width -= rowSize;
-    } else {
-        rowRect = { x: rect.x, y: rect.y, width: rect.width, height: rowSize };
-        rect.y += rowSize;
-        rect.height -= rowSize;
-    }
+    const currentLine = items.slice(0, i);
+    const remainingItems = items.slice(i);
+    const currentLineValue = currentLine.reduce((sum, item) => sum + item.value, 0);
 
-    layoutRow(row, rowRect, parentEl, isSectorLevel);
-    squarify(items.slice(i), rect, parentEl, isSectorLevel);
+    const lineAreaRatio = currentLineValue / totalValue;
+    const lineLength = isHorizontal ? area.width * lineAreaRatio : area.height * lineAreaRatio;
+
+    let subArea;
+    if (isHorizontal) {
+        // 水平分割，垂直排列
+        subArea = { items: currentLine, x: area.x, y: area.y, width: lineLength, height: area.height };
+        area.x += lineLength;
+        area.width -= lineLength;
+    } else {
+        // 垂直分割，水平排列
+        subArea = { items: currentLine, x: area.x, y: area.y, width: area.width, height: lineLength };
+        area.y += lineLength;
+        area.height -= lineLength;
+    }
+    
+    renderLine(subArea, parentEl, isSectorLevel);
+
+    area.items = remainingItems;
+    layout(area, parentEl, isSectorLevel);
 }
 
-function layoutRow(row, rect, parentEl, isSectorLevel) {
-    const totalValue = row.reduce((sum, item) => sum + item.value, 0);
+function renderLine(area, parentEl, isSectorLevel) {
+    const isHorizontal = area.width >= area.height;
+    const totalValue = area.items.reduce((sum, item) => sum + item.value, 0);
     if (totalValue <= 0) return;
 
-    const isHorizontal = rect.width < rect.height;
+    let currentPos = isHorizontal ? area.y : area.x;
 
-    for (const item of row) {
-        const proportion = item.value / totalValue;
-        const itemWidth = isHorizontal ? rect.width : rect.width * proportion;
-        const itemHeight = isHorizontal ? rect.height * proportion : rect.height;
+    area.items.forEach(item => {
+        const itemRatio = item.value / totalValue;
+        const itemLength = (isHorizontal ? area.height : area.width) * itemRatio;
+        
+        const x = isHorizontal ? area.x : currentPos;
+        const y = isHorizontal ? currentPos : area.y;
+        const width = isHorizontal ? area.width : itemLength;
+        const height = isHorizontal ? itemLength : area.height;
 
         if (isSectorLevel) {
             const sectorEl = document.createElement('div');
             sectorEl.className = 'treemap-sector';
-            sectorEl.style.left = `${rect.x}px`;
-            sectorEl.style.top = `${rect.y}px`;
-            sectorEl.style.width = `${itemWidth}px`;
-            sectorEl.style.height = `${itemHeight}px`;
+            sectorEl.style.left = `${x}px`;
+            sectorEl.style.top = `${y}px`;
+            sectorEl.style.width = `${width}px`;
+            sectorEl.style.height = `${height}px`;
 
             const titleLink = document.createElement('a');
             titleLink.className = 'treemap-title-link';
-            // 【修正关键点】确保 original_name 在生成URL时被正确编码
             titleLink.href = `/?sector=${encodeURIComponent(item.original_name)}`;
             titleLink.onclick = (e) => navigate(e, titleLink.href);
             titleLink.innerHTML = `<h2 class="treemap-title">${item.name}</h2>`;
@@ -200,34 +248,35 @@ function layoutRow(row, rect, parentEl, isSectorLevel) {
             parentEl.appendChild(sectorEl);
 
             const titleHeight = titleLink.offsetHeight > 0 ? titleLink.offsetHeight : 28;
-            squarify(item.items, { x: 0, y: titleHeight, width: itemWidth - 4, height: itemHeight - titleHeight - 4 }, sectorEl, false);
+            // 递归调用 layout 布局行业内部
+            layout({
+                items: item.items,
+                x: 0, y: titleHeight,
+                width: width - 4, height: height - titleHeight - 4
+            }, sectorEl, false);
         } else {
-            const stockEl = createStockElement(item, itemWidth, itemHeight);
-            stockEl.style.left = `${rect.x}px`;
-            stockEl.style.top = `${rect.y}px`;
+            const stockEl = createStockElement(item, width, height);
+            stockEl.style.left = `${x}px`;
+            stockEl.style.top = `${y}px`;
             parentEl.appendChild(stockEl);
         }
-
-        if (isHorizontal) {
-            rect.y += itemHeight;
-        } else {
-            rect.x += itemWidth;
-        }
-    }
+        
+        currentPos += itemLength;
+    });
 }
 
-function worst(row, side) {
-    if (!row.length) return Infinity;
-    const sum = row.reduce((s, item) => s + item.value, 0);
-    const s2 = sum * sum;
-    const side2 = side * side;
-    let max = 0;
-    for (const item of row) {
-        const r = Math.max((side2 * item.value) / s2, s2 / (side2 * item.value));
-        if (r > max) max = r;
-    }
-    return max;
+function calculateAspectRatio(line, lineValue, sideLength) {
+    if (!line.length || lineValue <= 0) return Infinity;
+    const totalArea = sideLength * (lineValue / line.reduce((s,i) => s + i.value, lineValue)); // This is an approximation
+    let maxRatio = 0;
+    line.forEach(item => {
+        const itemArea = (item.value / lineValue) * totalArea;
+        const ratio = Math.max(sideLength/itemArea, itemArea/sideLength);
+        if (ratio > maxRatio) maxRatio = ratio;
+    });
+    return maxRatio;
 }
+// --- 算法修正结束 ---
 
 function createStockElement(stock, width, height) {
     const stockLink = document.createElement('a');
