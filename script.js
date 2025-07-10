@@ -108,7 +108,7 @@ function renderHomePage(dataToRender, sectorName = null) {
 }
 
 
-// --- 【最终BOSS战: 全新、稳定、美观的Squarified Treemap算法】 ---
+// --- 稳定的 Squarified Treemap 布局算法 (无修改) ---
 
 function generateTreemap(data, container, groupIntoSectors = true) {
     container.innerHTML = '';
@@ -120,7 +120,6 @@ function generateTreemap(data, container, groupIntoSectors = true) {
 
     let itemsToLayout;
     if (groupIntoSectors) {
-        // 首页全景图逻辑
         const stocksBySector = groupDataBySector(data);
         const totalMarketCap = Object.values(stocksBySector).reduce((sum, sector) => sum + sector.total_market_cap, 0);
         const capRatio = 0.12; 
@@ -134,7 +133,6 @@ function generateTreemap(data, container, groupIntoSectors = true) {
         })).sort((a, b) => b.value - a.value);
 
     } else {
-        // 行业视图逻辑
         const totalMarketCap = data.reduce((sum, stock) => sum + stock.market_cap, 0);
         const capRatio = 0.22;
         const capValue = totalMarketCap * capRatio;
@@ -145,7 +143,6 @@ function generateTreemap(data, container, groupIntoSectors = true) {
         })).sort((a,b) => b.value - a.value);
     }
     
-    // 调用全新的、稳健的布局函数
     squarify(itemsToLayout, { x: 0, y: 0, width: totalWidth, height: totalHeight }, container, groupIntoSectors);
 }
 
@@ -158,7 +155,6 @@ function squarify(items, rect, parentEl, isSectorLevel) {
     const isHorizontal = rect.width >= rect.height;
     const side = isHorizontal ? rect.height : rect.width;
 
-    // 这个循环是 Squarify 算法的核心：找到最佳的一行/一列
     while (i < items.length) {
         const item = items[i];
         const newRow = [...row, item];
@@ -166,7 +162,7 @@ function squarify(items, rect, parentEl, isSectorLevel) {
             row.push(item);
             i++;
         } else {
-            break; // 找到了最佳分割点，不再添加
+            break; 
         }
     }
 
@@ -174,7 +170,6 @@ function squarify(items, rect, parentEl, isSectorLevel) {
     const totalValueInRect = items.reduce((sum, item) => sum + item.value, 0);
     const rowSize = (rowValue / totalValueInRect) * (isHorizontal ? rect.width : rect.height);
     
-    // 计算当前行和剩余区域的矩形范围
     let rowRect;
     let remainingRect;
 
@@ -186,9 +181,7 @@ function squarify(items, rect, parentEl, isSectorLevel) {
         remainingRect = { x: rect.x, y: rect.y + rowSize, width: rect.width, height: rect.height - rowSize };
     }
 
-    // 渲染当前行
     layoutRow(row, rowRect, parentEl, isSectorLevel);
-    // 对剩余的区域和项目进行递归布局
     squarify(items.slice(i), remainingRect, parentEl, isSectorLevel);
 }
 
@@ -196,14 +189,13 @@ function layoutRow(row, rect, parentEl, isSectorLevel) {
     const totalValue = row.reduce((sum, item) => sum + item.value, 0);
     if (totalValue <= 0) return;
 
-    const isHorizontal = rect.width < rect.height; // 注意：在行内，方向是与外层相反的
+    const isHorizontal = rect.width < rect.height; 
 
     for (const item of row) {
         const proportion = item.value / totalValue;
         const itemWidth = isHorizontal ? rect.width : rect.width * proportion;
         const itemHeight = isHorizontal ? rect.height * proportion : rect.height;
         
-        // 创建并渲染DOM元素
         if (isSectorLevel) {
             const sectorEl = document.createElement('div');
             sectorEl.className = 'treemap-sector';
@@ -221,7 +213,6 @@ function layoutRow(row, rect, parentEl, isSectorLevel) {
             parentEl.appendChild(sectorEl);
 
             const titleHeight = titleLink.offsetHeight > 0 ? titleLink.offsetHeight : 28;
-            // 对行业内部进行递归布局
             squarify(item.items, { x: 0, y: titleHeight, width: itemWidth - 4, height: itemHeight - titleHeight - 4 }, sectorEl, false);
         } else {
             const stockEl = createStockElement(item, itemWidth, itemHeight);
@@ -230,7 +221,6 @@ function layoutRow(row, rect, parentEl, isSectorLevel) {
             parentEl.appendChild(stockEl);
         }
 
-        // 更新下一个元素的位置
         if (isHorizontal) {
             rect.y += itemHeight;
         } else {
@@ -239,7 +229,6 @@ function layoutRow(row, rect, parentEl, isSectorLevel) {
     }
 }
 
-// 计算一组矩形在给定边长下的最差长宽比
 function worst(row, side) {
     if (!row.length) return Infinity;
     const sum = row.reduce((s, item) => s + item.value, 0);
@@ -255,15 +244,10 @@ function worst(row, side) {
         if (item.value < min) min = item.value;
     }
     
-    return Math.max(
-        (side2 * max) / s2, 
-        s2 / (side2 * min)
-    );
+    return Math.max( (side2 * max) / s2, s2 / (side2 * min) );
 }
 
-// --- 算法结束 ---
-
-
+// --- 【重大修改】createStockElement 函数 ---
 function createStockElement(stock, width, height) {
     const stockLink = document.createElement('a');
     stockLink.className = 'treemap-stock';
@@ -275,15 +259,31 @@ function createStockElement(stock, width, height) {
     const stockDiv = document.createElement('div');
     const change = parseFloat(stock.change_percent);
     stockDiv.className = `stock ${getColorClass(change)}`;
-    const area = width * height;
-    if (area > 10000) stockDiv.classList.add('detail-xl'); else if (area > 4000) stockDiv.classList.add('detail-lg');
-    else if (area > 1500) stockDiv.classList.add('detail-md'); else if (area > 600) stockDiv.classList.add('detail-sm');
-    else stockDiv.classList.add('detail-xs');
     
-    stockDiv.innerHTML = `<span class="stock-ticker">${stock.ticker}</span><span class="stock-name-zh">${stock.name_zh}</span><span class="stock-change">${change >= 0 ? '+' : ''}${change ? change.toFixed(2) : '0.00'}%</span>`;
+    // 【全新】根据面积应用动态字体类
+    const area = width * height;
+    if (area > 9000) {
+        stockDiv.classList.add('font-size-xl');
+    } else if (area > 3500) {
+        stockDiv.classList.add('font-size-lg');
+    } else if (area > 1200) {
+        stockDiv.classList.add('font-size-md');
+    } else if (area > 500) {
+        stockDiv.classList.add('font-size-sm');
+    } else {
+        stockDiv.classList.add('font-size-xs');
+    }
+    
+    // HTML 结构保持不变
+    stockDiv.innerHTML = `
+        <span class="stock-ticker">${stock.ticker}</span>
+        <span class="stock-name-zh">${stock.name_zh}</span>
+        <span class="stock-change">${change >= 0 ? '+' : ''}${change ? change.toFixed(2) : '0.00'}%</span>`;
+    
     stockLink.appendChild(stockDiv);
     return stockLink;
 }
+
 
 function groupDataBySector(data) {
     if (!data) return {};

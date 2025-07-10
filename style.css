@@ -32,40 +32,27 @@ body {
     box-sizing: border-box;
 }
 
-/* === 新增: 页面切换动画 === */
 @keyframes view-fade-in {
-    from {
-        opacity: 0;
-        transform: scale(0.98);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
+    from { opacity: 0; transform: scale(0.98); }
+    to { opacity: 1; transform: scale(1); }
 }
 
 .view-container {
-    /* 应用这个动画 */
     animation: view-fade-in 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
-    display: flex; /* 让子元素可以 flex-grow */
-    flex-direction: column; /* 保持 header-main-footer 布局 */
-    flex-grow: 1; /* 占据剩余空间 */
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
     min-height: 0;
 }
-/* ======================== */
 
-
-/* 通用头部 */
 .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--border-color); margin-bottom: 12px; flex-shrink: 0; }
 .header h1 { font-size: 22px; margin: 0; font-weight: 500; }
 .header .data-source { font-size: 14px; color: var(--text-secondary); }
 
-/* 加载状态 */
 .loading-indicator { width: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 18px; padding: 50px; color: var(--text-secondary); flex-grow: 1;}
 .spinner { border: 4px solid rgba(0, 0, 0, 0.1); border-radius: 50%; border-top: 4px solid var(--primary-blue); width: 36px; height: 36px; animation: spin 1s linear infinite; margin-bottom: 16px; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-/* Treemap布局 */
 .heatmap-container-final { position: relative; width: 100%; flex-grow: 1; overflow: hidden; }
 .treemap-sector { position: absolute; box-sizing: border-box; overflow: hidden; border: 2px solid var(--background-color); background-color: var(--container-bg-color); }
 .treemap-title { font-size: 13px; font-weight: 500; color: var(--text-primary); padding: 6px 8px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid var(--border-color);}
@@ -75,21 +62,52 @@ body {
 .treemap-stock { position: absolute; box-sizing: border-box; text-decoration: none; border: 1px solid var(--background-color); transition: outline 0.1s ease-out; }
 .treemap-stock:hover { outline: 2px solid var(--primary-blue); z-index: 10; }
 
-.stock { width: 100%; height: 100%; display: flex; flex-direction: column; padding: 6px; overflow: hidden; position: relative; justify-content: flex-start; align-items: flex-start; text-align: left; }
+/* === 【重大修改】股票方块内容样式 === */
+.stock {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    /* 核心修改：使用Flexbox实现完美居中 */
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 4px; /* 增加一点内边距，避免文字贴边 */
+    overflow: hidden;
+}
 .stock.gain-1, .stock.loss-1 { color: var(--text-primary); }
 .stock.flat { color: var(--flat-text); }
 .stock:not(.gain-1):not(.loss-1):not(.flat) { color: var(--text-white); }
 
-.stock-ticker { font-weight: 700; line-height: 1.1; }
-.stock-name-zh { font-weight: 500; line-height: 1.2; }
-.stock-change { font-weight: 500; position: absolute; bottom: 6px; left: 6px; }
+.stock-ticker { font-weight: 700; line-height: 1.2; }
+.stock-name-zh { font-weight: 500; line-height: 1.3; opacity: 0.9; }
+.stock-change { font-weight: 500; line-height: 1.2; margin-top: 2px; }
 
-.detail-xl .stock-ticker { font-size: 18px; } .detail-xl .stock-name-zh { font-size: 13px; display: block; } .detail-xl .stock-change { font-size: 14px; display: block; }
-.detail-lg .stock-ticker { font-size: 14px; } .detail-lg .stock-name-zh { font-size: 12px; display: block; } .detail-lg .stock-change { font-size: 12px; display: block; }
-.detail-md .stock-ticker { font-size: 13px; } .detail-md .stock-name-zh { font-size: 11px; display: block; } .detail-md .stock-change { display: none; }
-.detail-sm .stock-ticker { font-size: 12px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
-.detail-sm .stock-name-zh, .detail-sm .stock-change { display: none; }
-.detail-xs .stock-ticker, .detail-xs .stock-name-zh, .detail-xs .stock-change { display: none; }
+/* === 【全新】动态字体和内容显示类 === */
+
+/* 超大方块：显示所有内容 */
+.font-size-xl .stock-ticker { font-size: 20px; }
+.font-size-xl .stock-name-zh { font-size: 14px; }
+.font-size-xl .stock-change { font-size: 15px; }
+
+/* 大方块：显示所有内容，字体稍小 */
+.font-size-lg .stock-ticker { font-size: 16px; }
+.font-size-lg .stock-name-zh { font-size: 12px; }
+.font-size-lg .stock-change { font-size: 13px; }
+
+/* 中方块：隐藏涨跌幅 */
+.font-size-md .stock-ticker { font-size: 14px; }
+.font-size-md .stock-name-zh { font-size: 11px; }
+.font-size-md .stock-change { display: none; }
+
+/* 小方块：只显示股票代码 */
+.font-size-sm .stock-ticker { font-size: 12px; }
+.font-size-sm .stock-name-zh, .font-size-sm .stock-change { display: none; }
+
+/* 超小方块：隐藏所有文字 */
+.font-size-xs .stock-ticker, .font-size-xs .stock-name-zh, .font-size-xs .stock-change { display: none; }
+
+/* === 【废弃】删除所有旧的 .detail-xx 类 === */
 
 .gain-5 { background-color: var(--gain-5); } .gain-4 { background-color: var(--gain-4); } .gain-3 { background-color: var(--gain-3); }
 .gain-2 { background-color: var(--gain-2); } .gain-1 { background-color: var(--gain-1); }
