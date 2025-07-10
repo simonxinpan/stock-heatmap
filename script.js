@@ -67,6 +67,7 @@ function showLoading() {
     appContainer.innerHTML = `<div class="loading-indicator"><div class="spinner"></div><p>数据加载中...</p></div>`;
 }
 
+// --- 【UI优化】为底部的图例(Legend)添加文字说明 ---
 function renderHomePage(dataToRender, sectorName = null) {
     let headerHtml;
 
@@ -85,11 +86,11 @@ function renderHomePage(dataToRender, sectorName = null) {
             ${headerHtml}
             <main id="heatmap-container-final" class="heatmap-container-final"></main>
             <footer class="legend">
-                <div class="legend-item"><div class="legend-color-box loss-5"></div></div>
-                <div class="legend-item"><div class="legend-color-box loss-3"></div></div>
-                <div class="legend-item"><div class="legend-color-box flat"></div></div>
-                <div class="legend-item"><div class="legend-color-box gain-3"></div></div>
-                <div class="legend-item"><div class="legend-color-box gain-5"></div></div>
+                <div class="legend-item"><div class="legend-color-box loss-5"></div><span>< -3%</span></div>
+                <div class="legend-item"><div class="legend-color-box loss-3"></div><span>-1%</span></div>
+                <div class="legend-item"><div class="legend-color-box flat"></div><span>0%</span></div>
+                <div class="legend-item"><div class="legend-color-box gain-3"></div><span>+1%</span></div>
+                <div class="legend-item"><div class="legend-color-box gain-5"></div><span>> +3%</span></div>
             </footer>
         </div>
     `;
@@ -107,8 +108,6 @@ function renderHomePage(dataToRender, sectorName = null) {
     }, 0);
 }
 
-
-// --- 稳定的 Squarified Treemap 布局算法 (无修改) ---
 
 function generateTreemap(data, container, groupIntoSectors = true) {
     container.innerHTML = '';
@@ -146,33 +145,47 @@ function generateTreemap(data, container, groupIntoSectors = true) {
     squarify(itemsToLayout, { x: 0, y: 0, width: totalWidth, height: totalHeight }, container, groupIntoSectors);
 }
 
-
+// --- 【代码优化】为复杂的布局算法添加清晰的注释 ---
+/**
+ * 主布局函数，递归地将项目填充到给定的矩形区域中
+ * @param {Array} items - 需要布局的对象数组 (每个对象必须有 .value 属性)
+ * @param {Object} rect - 当前可用矩形区域 {x, y, width, height}
+ * @param {HTMLElement} parentEl - 用于放置生成元素的父容器
+ * @param {boolean} isSectorLevel - 标记当前是否在布局行业板块
+ */
 function squarify(items, rect, parentEl, isSectorLevel) {
+    // 递归终止条件
     if (!items.length) return;
 
     let row = [];
     let i = 0;
+    // 判断当前矩形是宽的还是高的
     const isHorizontal = rect.width >= rect.height;
+    // 获取较短的边长，用于计算长宽比
     const side = isHorizontal ? rect.height : rect.width;
 
+    // Squarify 算法的核心：迭代地找到能组成“最佳”行/列的元素集合
     while (i < items.length) {
         const item = items[i];
         const newRow = [...row, item];
+        // 如果当前行是空的，或者加入新元素后，行的“方块化”程度没有变差，则继续添加
         if (row.length === 0 || worst(row, side) >= worst(newRow, side)) {
             row.push(item);
             i++;
         } else {
-            break; 
+            break; // 否则，说明找到了最佳分割点，停止添加
         }
     }
 
     const rowValue = row.reduce((sum, item) => sum + item.value, 0);
     const totalValueInRect = items.reduce((sum, item) => sum + item.value, 0);
+    // 根据当前行的总价值，计算它应占用的长度（宽或高）
     const rowSize = (rowValue / totalValueInRect) * (isHorizontal ? rect.width : rect.height);
     
     let rowRect;
     let remainingRect;
 
+    // 计算当前行和剩余区域的矩形范围
     if (isHorizontal) {
         rowRect = { x: rect.x, y: rect.y, width: rowSize, height: rect.height };
         remainingRect = { x: rect.x + rowSize, y: rect.y, width: rect.width - rowSize, height: rect.height };
@@ -181,14 +194,24 @@ function squarify(items, rect, parentEl, isSectorLevel) {
         remainingRect = { x: rect.x, y: rect.y + rowSize, width: rect.width, height: rect.height - rowSize };
     }
 
+    // 渲染当前行/列的所有元素
     layoutRow(row, rowRect, parentEl, isSectorLevel);
+    // 对剩余的区域和项目进行递归布局
     squarify(items.slice(i), remainingRect, parentEl, isSectorLevel);
 }
 
+/**
+ * 布局单行/单列内的所有元素
+ * @param {Array} row - 一行/一列中的所有元素
+ * @param {Object} rect - 分配给这一行/一列的矩形区域
+ * @param {HTMLElement} parentEl - 父容器
+ * @param {boolean} isSectorLevel - 是否是行业层级
+ */
 function layoutRow(row, rect, parentEl, isSectorLevel) {
     const totalValue = row.reduce((sum, item) => sum + item.value, 0);
     if (totalValue <= 0) return;
 
+    // 在行内，方向是与外层相反的
     const isHorizontal = rect.width < rect.height; 
 
     for (const item of row) {
@@ -196,6 +219,7 @@ function layoutRow(row, rect, parentEl, isSectorLevel) {
         const itemWidth = isHorizontal ? rect.width : rect.width * proportion;
         const itemHeight = isHorizontal ? rect.height * proportion : rect.height;
         
+        // 创建并渲染DOM元素
         if (isSectorLevel) {
             const sectorEl = document.createElement('div');
             sectorEl.className = 'treemap-sector';
@@ -213,6 +237,7 @@ function layoutRow(row, rect, parentEl, isSectorLevel) {
             parentEl.appendChild(sectorEl);
 
             const titleHeight = titleLink.offsetHeight > 0 ? titleLink.offsetHeight : 28;
+            // 对行业内部进行递归布局
             squarify(item.items, { x: 0, y: titleHeight, width: itemWidth - 4, height: itemHeight - titleHeight - 4 }, sectorEl, false);
         } else {
             const stockEl = createStockElement(item, itemWidth, itemHeight);
@@ -221,6 +246,7 @@ function layoutRow(row, rect, parentEl, isSectorLevel) {
             parentEl.appendChild(stockEl);
         }
 
+        // 更新下一个元素的位置
         if (isHorizontal) {
             rect.y += itemHeight;
         } else {
@@ -229,6 +255,12 @@ function layoutRow(row, rect, parentEl, isSectorLevel) {
     }
 }
 
+/**
+ * 计算一组矩形在给定边长下的最差长宽比
+ * @param {Array} row - 一组元素
+ * @param {number} side - 固定的边长
+ * @returns {number} - 最大的长宽比 (越接近1越好)
+ */
 function worst(row, side) {
     if (!row.length) return Infinity;
     const sum = row.reduce((s, item) => s + item.value, 0);
@@ -247,7 +279,6 @@ function worst(row, side) {
     return Math.max( (side2 * max) / s2, s2 / (side2 * min) );
 }
 
-// --- 【重大修改】createStockElement 函数 ---
 function createStockElement(stock, width, height) {
     const stockLink = document.createElement('a');
     stockLink.className = 'treemap-stock';
@@ -260,7 +291,6 @@ function createStockElement(stock, width, height) {
     const change = parseFloat(stock.change_percent);
     stockDiv.className = `stock ${getColorClass(change)}`;
     
-    // 【全新】根据面积应用动态字体类
     const area = width * height;
     if (area > 9000) {
         stockDiv.classList.add('font-size-xl');
@@ -274,7 +304,6 @@ function createStockElement(stock, width, height) {
         stockDiv.classList.add('font-size-xs');
     }
     
-    // HTML 结构保持不变
     stockDiv.innerHTML = `
         <span class="stock-ticker">${stock.ticker}</span>
         <span class="stock-name-zh">${stock.name_zh}</span>
@@ -283,7 +312,6 @@ function createStockElement(stock, width, height) {
     stockLink.appendChild(stockDiv);
     return stockLink;
 }
-
 
 function groupDataBySector(data) {
     if (!data) return {};
