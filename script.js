@@ -108,7 +108,8 @@ function renderHomePage(dataToRender, sectorName = null) {
 }
 
 
-// --- 【重大修正: 全新、稳定、经典的Treemap布局算法】 ---
+// --- 【最终BOSS战: 全新、稳定、美观的Squarified Treemap算法】 ---
+
 function generateTreemap(data, container, groupIntoSectors = true) {
     container.innerHTML = '';
     const { clientWidth: totalWidth, clientHeight: totalHeight } = container;
@@ -145,44 +146,69 @@ function generateTreemap(data, container, groupIntoSectors = true) {
     }
     
     // 调用全新的、稳健的布局函数
-    layout(itemsToLayout, 0, 0, totalWidth, totalHeight, container, groupIntoSectors);
+    squarify(itemsToLayout, { x: 0, y: 0, width: totalWidth, height: totalHeight }, container, groupIntoSectors);
 }
 
-function layout(items, x, y, width, height, parentElement, isSectorLevel) {
-    if (!items || items.length === 0 || width <= 0 || height <= 0) {
-        return;
+
+function squarify(items, rect, parentEl, isSectorLevel) {
+    if (!items.length) return;
+
+    let row = [];
+    let i = 0;
+    const isHorizontal = rect.width >= rect.height;
+    const side = isHorizontal ? rect.height : rect.width;
+
+    // 这个循环是 Squarify 算法的核心：找到最佳的一行/一列
+    while (i < items.length) {
+        const item = items[i];
+        const newRow = [...row, item];
+        if (row.length === 0 || worst(row, side) >= worst(newRow, side)) {
+            row.push(item);
+            i++;
+        } else {
+            break; // 找到了最佳分割点，不再添加
+        }
     }
 
-    const totalValue = items.reduce((sum, item) => sum + item.value, 0);
+    const rowValue = row.reduce((sum, item) => sum + item.value, 0);
+    const totalValueInRect = items.reduce((sum, item) => sum + item.value, 0);
+    const rowSize = (rowValue / totalValueInRect) * (isHorizontal ? rect.width : rect.height);
+    
+    // 计算当前行和剩余区域的矩形范围
+    let rowRect;
+    let remainingRect;
+
+    if (isHorizontal) {
+        rowRect = { x: rect.x, y: rect.y, width: rowSize, height: rect.height };
+        remainingRect = { x: rect.x + rowSize, y: rect.y, width: rect.width - rowSize, height: rect.height };
+    } else {
+        rowRect = { x: rect.x, y: rect.y, width: rect.width, height: rowSize };
+        remainingRect = { x: rect.x, y: rect.y + rowSize, width: rect.width, height: rect.height - rowSize };
+    }
+
+    // 渲染当前行
+    layoutRow(row, rowRect, parentEl, isSectorLevel);
+    // 对剩余的区域和项目进行递归布局
+    squarify(items.slice(i), remainingRect, parentEl, isSectorLevel);
+}
+
+function layoutRow(row, rect, parentEl, isSectorLevel) {
+    const totalValue = row.reduce((sum, item) => sum + item.value, 0);
     if (totalValue <= 0) return;
-    
-    // 决定是水平分割还是垂直分割
-    const isHorizontal = width > height;
-    
-    let currentPos = isHorizontal ? x : y;
 
-    for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        const itemProportion = item.value / totalValue;
-        
-        const remainingValue = items.slice(i).reduce((sum, it) => sum + it.value, 0);
-        const remainingProportion = item.value / remainingValue;
-        
-        const remainingWidth = isHorizontal ? width - (currentPos - x) : width;
-        const remainingHeight = isHorizontal ? height : height - (currentPos - y);
+    const isHorizontal = rect.width < rect.height; // 注意：在行内，方向是与外层相反的
 
-        const itemWidth = isHorizontal ? remainingWidth * remainingProportion : remainingWidth;
-        const itemHeight = isHorizontal ? remainingHeight : remainingHeight * remainingProportion;
-
-        const itemX = isHorizontal ? currentPos : x;
-        const itemY = isHorizontal ? y : currentPos;
+    for (const item of row) {
+        const proportion = item.value / totalValue;
+        const itemWidth = isHorizontal ? rect.width : rect.width * proportion;
+        const itemHeight = isHorizontal ? rect.height * proportion : rect.height;
         
+        // 创建并渲染DOM元素
         if (isSectorLevel) {
-            // 渲染行业板块
             const sectorEl = document.createElement('div');
             sectorEl.className = 'treemap-sector';
-            sectorEl.style.left = `${itemX}px`;
-            sectorEl.style.top = `${itemY}px`;
+            sectorEl.style.left = `${rect.x}px`;
+            sectorEl.style.top = `${rect.y}px`;
             sectorEl.style.width = `${itemWidth}px`;
             sectorEl.style.height = `${itemHeight}px`;
 
@@ -192,30 +218,51 @@ function layout(items, x, y, width, height, parentElement, isSectorLevel) {
             titleLink.onclick = (e) => navigate(e, titleLink.href);
             titleLink.innerHTML = `<h2 class="treemap-title">${item.name}</h2>`;
             sectorEl.appendChild(titleLink);
-            parentElement.appendChild(sectorEl);
+            parentEl.appendChild(sectorEl);
 
             const titleHeight = titleLink.offsetHeight > 0 ? titleLink.offsetHeight : 28;
-            
-            // 递归调用 layout 布局行业内部的股票
-            if (item.items && item.items.length > 0) {
-                layout(item.items, 0, titleHeight, itemWidth - 4, itemHeight - titleHeight - 4, sectorEl, false);
-            }
+            // 对行业内部进行递归布局
+            squarify(item.items, { x: 0, y: titleHeight, width: itemWidth - 4, height: itemHeight - titleHeight - 4 }, sectorEl, false);
         } else {
-            // 渲染个股方块
             const stockEl = createStockElement(item, itemWidth, itemHeight);
-            stockEl.style.left = `${itemX}px`;
-            stockEl.style.top = `${itemY}px`;
-            parentElement.appendChild(stockEl);
+            stockEl.style.left = `${rect.x}px`;
+            stockEl.style.top = `${rect.y}px`;
+            parentEl.appendChild(stockEl);
         }
-        
+
+        // 更新下一个元素的位置
         if (isHorizontal) {
-            currentPos += itemWidth;
+            rect.y += itemHeight;
         } else {
-            currentPos += itemHeight;
+            rect.x += itemWidth;
         }
     }
 }
-// --- 算法修正结束 ---
+
+// 计算一组矩形在给定边长下的最差长宽比
+function worst(row, side) {
+    if (!row.length) return Infinity;
+    const sum = row.reduce((s, item) => s + item.value, 0);
+    if(sum <= 0) return Infinity;
+    
+    const s2 = sum * sum;
+    const side2 = side * side;
+    let max = 0;
+    let min = Infinity;
+
+    for (const item of row) {
+        if (item.value > max) max = item.value;
+        if (item.value < min) min = item.value;
+    }
+    
+    return Math.max(
+        (side2 * max) / s2, 
+        s2 / (side2 * min)
+    );
+}
+
+// --- 算法结束 ---
+
 
 function createStockElement(stock, width, height) {
     const stockLink = document.createElement('a');
