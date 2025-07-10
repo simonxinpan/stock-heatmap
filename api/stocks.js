@@ -1,7 +1,7 @@
 import { Redis } from '@upstash/redis';
 
 // --- 配置 ---
-const CACHE_KEY_PREFIX = 'stock_heatmap_sp500_v2_granular'; // 新的、精细化行业的缓存前缀
+const CACHE_KEY_PREFIX = 'stock_heatmap_sp500_v3_deduped'; // 新的、去重后的缓存前缀
 const CACHE_TTL_SECONDS = 900; // 缓存15分钟
 
 const redis = new Redis({
@@ -9,7 +9,8 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN,
 });
 
-// === 1. 【重大更新】标普500按20个精细化行业重组的数据库 ===
+// === 1. 【重大修正】数据去重后的精细化行业数据库 ===
+// 每只股票只存在于一个最主要的行业分类中，解决首页重复问题。
 const industryStockList = {
     "Software & Services": [
         { "ticker": "MSFT", "name_zh": "微软" }, { "ticker": "ORCL", "name_zh": "甲骨文" },
@@ -19,7 +20,7 @@ const industryStockList = {
         { "ticker": "CDNS", "name_zh": "铿腾电子" }, { "ticker": "SNPS", "name_zh": "新思科技" },
         { "ticker": "FTNT", "name_zh": "飞塔" }, { "ticker": "ANSS", "name_zh": "安西斯" },
         { "ticker": "PYPL", "name_zh": "PayPal" }, { "ticker": "ADSK", "name_zh": "欧特克" },
-        { "ticker": "IT", "name_zh": "加特纳" }
+        { "ticker": "IT", "name_zh": "加特纳" }, { "ticker": "ROP", "name_zh": "罗珀科技"}
     ],
     "Technology Hardware & Equipment": [
         { "ticker": "AAPL", "name_zh": "苹果" }, { "ticker": "DELL", "name_zh": "戴尔科技" },
@@ -96,15 +97,15 @@ const industryStockList = {
         { "ticker": "T", "name_zh": "AT&T" }, { "ticker": "TMUS", "name_zh": "T-Mobile" }
     ],
     "Capital Goods": [
-        { "ticker": "GE", "name_zh": "通用电气" }, { "ticker": "CAT", "name_zh": "卡特彼勒" },
-        { "ticker": "HON", "name_zh": "霍尼韦尔" }, { "ticker": "DE", "name_zh": "迪尔" },
-        { "ticker": "ETN", "name_zh": "伊顿" }, { "ticker": "ITW", "name_zh": "伊利诺伊工具" },
-        { "ticker": "EMR", "name_zh": "艾默生电气" }, { "ticker": "PH", "name_zh": "派克汉尼汾" }
+        { "ticker": "CAT", "name_zh": "卡特彼勒" }, { "ticker": "HON", "name_zh": "霍尼韦尔" },
+        { "ticker": "DE", "name_zh": "迪尔" }, { "ticker": "ETN", "name_zh": "伊顿" },
+        { "ticker": "ITW", "name_zh": "伊利诺伊工具" }, { "ticker": "EMR", "name_zh": "艾默生电气" },
+        { "ticker": "PH", "name_zh": "派克汉尼汾" }, { "ticker": "PCAR", "name_zh": "帕卡"}
     ],
     "Aerospace & Defense": [
         { "ticker": "BA", "name_zh": "波音" }, { "ticker": "RTX", "name_zh": "雷神技术" },
         { "ticker": "LMT", "name_zh": "洛克希德马丁" }, { "ticker": "GD", "name_zh": "通用动力" },
-        { "ticker": "NOC", "name_zh": "诺斯洛普格鲁门" }
+        { "ticker": "NOC", "name_zh": "诺斯洛普格鲁门" }, {"ticker": "GE", "name_zh": "通用电气航空"}
     ],
     "Transportation": [
         { "ticker": "UNP", "name_zh": "联合太平洋" }, { "ticker": "UPS", "name_zh": "联合包裹" },
@@ -114,10 +115,9 @@ const industryStockList = {
     ],
     "Food, Beverage & Tobacco": [
         { "ticker": "PEP", "name_zh": "百事" }, { "ticker": "KO", "name_zh": "可口可乐" },
-        { "ticker": "PG", "name_zh": "宝洁" }, { "ticker": "PM", "name_zh": "菲利普莫里斯" },
-        { "ticker": "MDLZ", "name_zh": "亿滋国际" }, { "ticker": "MO", "name_zh": "奥驰亚" },
-        { "ticker": "ADM", "name_zh": "ADM" }, { "ticker": "HSY", "name_zh": "好时" },
-        { "ticker": "KHC", "name_zh": "卡夫亨氏" }
+        { "ticker": "PM", "name_zh": "菲利普莫里斯" }, { "ticker": "MDLZ", "name_zh": "亿滋国际" },
+        { "ticker": "MO", "name_zh": "奥驰亚" }, { "ticker": "ADM", "name_zh": "ADM" },
+        { "ticker": "HSY", "name_zh": "好时" }, { "ticker": "KHC", "name_zh": "卡夫亨氏" }
     ],
     "Household & Personal Products": [
         { "ticker": "PG", "name_zh": "宝洁" }, { "ticker": "CL", "name_zh": "高露洁" },
@@ -150,7 +150,8 @@ const industryStockList = {
     ]
 };
 
-// 动态生成首页股票列表（每个行业取前5个）和全量名称字典
+// --- 以下代码与上一版相同，但为了完整性一并提供 ---
+
 const homepageTickers = [];
 const fullTickerNameMap = new Map();
 for (const sector in industryStockList) {
@@ -161,65 +162,24 @@ for (const sector in industryStockList) {
     });
 }
 
-// === 2. 您提供的完整版行业中英文字典 ===
 const sectorDictionary = {
-    // ... (字典内容保持不变，这里为简洁省略，您的文件里应该保留完整字典)
-    "Energy": "能源",
-    "Materials": "原材料",
-    "Industrials": "工业",
-    "Consumer Discretionary": "非必需消费品",
-    "Consumer Staples": "必需消费品",
-    "Health Care": "医疗健康",
-    "Financials": "金融",
-    "Information Technology": "信息技术",
-    "Technology": "信息技术", // 同义词
-    "Communication Services": "通讯服务",
-    "Communications": "通讯服务", // 同义词
-    "Utilities": "公用事业",
-    "Real Estate": "房地产",
-
-    // Finnhub & User's List (补充的详细行业名)
-    "Aerospace & Defense": "航空航天与国防",
-    "Aerospace": "航空航天",
-    "Airlines": "航空公司",
-    "Automobiles & Components": "汽车",
-    "Automobiles": "汽车",
-    "Banks": "银行业",
-    "Banking": "银行业",
-    "Beverages": "饮料",
-    "Capital Goods": "资本品",
-    "Commercial & Professional Services": "商业服务",
-    "Consumer goods": "消费品",
-    "Consumer products": "消费品",
-    "Diversified Financials": "多元化金融",
-    "Financial Services": "金融服务",
-    "Food & Staples Retailing": "食品零售",
-    "Food, Beverage & Tobacco": "食品与烟草",
-    "Health Care Equipment & Services": "医疗设备与服务",
-    "Hotels, Restaurants & Leisure": "酒店与休闲",
-    "Household & Personal Products": "家庭与个人用品",
-    "Insurance": "保险",
-    "Machinery": "机械",
-    "Media & Entertainment": "媒体与娱乐",
-    "Media": "媒体",
-    "Pharmaceuticals, Biotechnology & Life Sciences": "制药与生物科技",
-    "Pharmaceuticals": "制药",
-    "Retailing": "零售业", 
-    "Retail": "零售业",    
-    "Road & Rail": "陆路运输",
-    "Semiconductors & Semiconductor Equipment": "半导体",
-    "Semiconductors": "半导体",
-    "Software & Services": "软件与服务",
-    "Technology Hardware & Equipment": "技术硬件",
-    "Telecommunication Services": "电信服务",
-    "Telecommunication": "电信服务", // 同义词
-    "Textiles, Apparel & Luxury Goods": "纺织品与服装",
-    "Textiles": "纺织品",
-    "Transportation": "交通运输",
+    "Energy": "能源", "Materials": "原材料", "Industrials": "工业", "Consumer Discretionary": "非必需消费品",
+    "Consumer Staples": "必需消费品", "Health Care": "医疗健康", "Financials": "金融", "Information Technology": "信息技术",
+    "Technology": "信息技术", "Communication Services": "通讯服务", "Communications": "通讯服务", "Utilities": "公用事业",
+    "Real Estate": "房地产", "Aerospace & Defense": "航空航天与国防", "Aerospace": "航空航天", "Airlines": "航空公司",
+    "Automobiles & Components": "汽车", "Automobiles": "汽车", "Banks": "银行业", "Banking": "银行业",
+    "Beverages": "饮料", "Capital Goods": "资本品", "Commercial & Professional Services": "商业服务",
+    "Consumer goods": "消费品", "Consumer products": "消费品", "Diversified Financials": "多元化金融",
+    "Financial Services": "金融服务", "Food & Staples Retailing": "食品零售", "Food, Beverage & Tobacco": "食品与烟草",
+    "Health Care Equipment & Services": "医疗设备与服务", "Hotels, Restaurants & Leisure": "酒店与休闲",
+    "Household & Personal Products": "家庭与个人用品", "Insurance": "保险", "Machinery": "机械",
+    "Media & Entertainment": "媒体与娱乐", "Media": "媒体", "Pharmaceuticals, Biotechnology & Life Sciences": "制药与生物科技",
+    "Pharmaceuticals": "制药", "Retailing": "零售业", "Retail": "零售业", "Road & Rail": "陆路运输",
+    "Semiconductors & Semiconductor Equipment": "半导体", "Semiconductors": "半导体", "Software & Services": "软件与服务",
+    "Technology Hardware & Equipment": "技术硬件", "Telecommunication Services": "电信服务", "Telecommunication": "电信服务",
+    "Textiles, Apparel & Luxury Goods": "纺织品与服装", "Textiles": "纺织品", "Transportation": "交通运输",
 };
 
-
-// --- 主处理函数 (无需修改) ---
 export default async function handler(request, response) {
     const { searchParams } = new URL(request.url, `https://${request.headers.host}`);
     const ticker = searchParams.get('ticker');
@@ -241,8 +201,6 @@ export default async function handler(request, response) {
         return response.status(500).json({ error: error.message || 'An internal server error occurred.' });
     }
 }
-
-// --- 数据获取函数 (无需修改) ---
 
 async function fetchHomepageHeatmapData() {
     const cacheKey = `${CACHE_KEY_PREFIX}_homepage`;
@@ -267,9 +225,7 @@ async function getOrFetchData(cacheKey, stockList) {
             console.log(`Serving data from cache for key: ${cacheKey}`);
             return cachedData;
         }
-    } catch (e) {
-        console.error("Redis GET error:", e.message);
-    }
+    } catch (e) { console.error("Redis GET error:", e.message); }
 
     console.log(`Cache miss for ${cacheKey}. Fetching ${stockList.length} stocks fresh data.`);
     const tickers = stockList.map(s => s.ticker);
@@ -293,23 +249,17 @@ async function getOrFetchData(cacheKey, stockList) {
         for (const sector in industryStockList) {
             if (industryStockList[sector].some(s => s.ticker === stock.ticker)) {
                 masterSectorName = sector;
-                break;
+                break; // 找到后立即跳出循环，确保唯一性
             }
         }
-        return {
-            ...stock,
-            sector: sectorDictionary[masterSectorName] || masterSectorName,
-            original_sector: masterSectorName
-        };
+        return { ...stock, sector: sectorDictionary[masterSectorName] || masterSectorName, original_sector: masterSectorName };
     });
 
     if (allStockData.length > 0) {
         try {
             await redis.set(cacheKey, allStockData, { ex: CACHE_TTL_SECONDS });
             console.log(`Stored ${allStockData.length} stocks in cache for key: ${cacheKey}.`);
-        } catch(e) {
-            console.error("Redis SET error:", e.message);
-        }
+        } catch(e) { console.error("Redis SET error:", e.message); }
     }
     return allStockData;
 }
@@ -319,30 +269,19 @@ async function fetchApiDataForTicker(ticker) {
     try {
         const apiKey = process.env.FINNHUB_API_KEY;
         if (!apiKey) throw new Error('FINNHUB_API_KEY is not configured.');
-
         const fetchFromFinnhub = async (endpoint) => {
             const url = `https://finnhub.io/api/v1${endpoint}&token=${apiKey}`;
             const res = await fetch(url);
             if (!res.ok) throw new Error(`Finnhub API error for ${url}: ${res.statusText}`);
             return res.json();
         };
-
         const [profile, quote] = await Promise.all([
             fetchFromFinnhub(`/stock/profile2?symbol=${ticker}`),
             fetchFromFinnhub(`/quote?symbol=${ticker}`)
         ]);
-
         if (!profile || !quote || typeof profile.marketCapitalization === 'undefined' || profile.marketCapitalization === 0) return null;
-        
         const chineseName = fullTickerNameMap.get(ticker) || profile.name.split(' ')[0];
-        
-        return { 
-            ticker, 
-            name_zh: chineseName, 
-            market_cap: profile.marketCapitalization, 
-            change_percent: quote.dp,
-            logo: profile.logo
-        };
+        return { ticker, name_zh: chineseName, market_cap: profile.marketCapitalization, change_percent: quote.dp, logo: profile.logo };
     } catch (error) {
         console.error(`Error fetching data for ticker ${ticker}:`, error);
         return null;
@@ -352,21 +291,17 @@ async function fetchApiDataForTicker(ticker) {
 async function fetchSingleStockData(ticker) {
     const apiKey = process.env.FINNHUB_API_KEY;
     if (!apiKey) throw new Error('FINNHUB_API_KEY is not configured.');
-    
     const fetchFromFinnhub = async (endpoint) => {
         const url = `https://finnhub.io/api/v1${endpoint}&token=${apiKey}`;
         const res = await fetch(url);
         if (!res.ok) throw new Error(`Finnhub API error for ${url}: ${res.statusText}`);
         return res.json();
     };
-    
     const [profile, quote] = await Promise.all([
         fetchFromFinnhub(`/stock/profile2?symbol=${ticker}`),
         fetchFromFinnhub(`/quote?symbol=${ticker}`)
     ]);
-    
     const description = `(自动生成) ${profile.name} 是一家总部位于 ${profile.country || '未知'} 的公司，属于 ${profile.finnhubIndustry || '未知'} 行业，于 ${profile.ipo || '未知日期'} 上市。`;
     const nameZh = fullTickerNameMap.get(ticker) || profile.name;
-    
     return { profile: { ...profile, description, name_zh: nameZh }, quote };
 }

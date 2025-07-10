@@ -14,6 +14,7 @@ async function router() {
         currentView = { type: 'detail', key: symbol };
         await renderStockDetailPage(symbol);
     } else if (sector) {
+        // 使用 decodeURIComponent 解码从 URL 获取的行业名称
         const decodedSector = decodeURIComponent(sector);
         currentView = { type: 'sector', key: decodedSector };
         document.title = `${decodedSector} - 行业热力图`;
@@ -22,8 +23,12 @@ async function router() {
             renderHomePage(clientDataCache[decodedSector], decodedSector);
         } else {
             try {
-                const res = await fetch(`/api/stocks?sector=${sector}`);
-                if (!res.ok) throw new Error('获取行业数据失败');
+                // 在请求 API 时，确保 sector 参数是正确编码的
+                const res = await fetch(`/api/stocks?sector=${encodeURIComponent(decodedSector)}`);
+                if (!res.ok) {
+                     const errorData = await res.json();
+                     throw new Error(errorData.error || '获取行业数据失败');
+                }
                 const sectorData = await res.json();
                 clientDataCache[decodedSector] = sectorData;
                 renderHomePage(sectorData, decodedSector);
@@ -72,17 +77,16 @@ function renderHomePage(dataToRender, sectorName = null) {
         headerHtml = `<header class="header"><h1>股票热力图 - 全景图</h1><div class="data-source">标普500 (S&P 500)</div></header>`;
     }
 
-    //【动画修改】在最外层包裹一个 .view-container 用于动画
     appContainer.innerHTML = `
         <div class="view-container">
             ${headerHtml}
             <main id="heatmap-container-final" class="heatmap-container-final"></main>
             <footer class="legend">
-                <div class="legend-item"><div class="legend-color-box loss-5"></div></div>
-                <div class="legend-item"><div class="legend-color-box loss-3"></div></div>
-                <div class="legend-item"><div class="legend-color-box flat"></div></div>
-                <div class="legend-item"><div class="legend-color-box gain-3"></div></div>
-                <div class="legend-item"><div class="legend-color-box gain-5"></div></div>
+                <div class="legend-item"><div class="legend-color-box loss-5"></div><span class="legend-text">< -3%</span></div>
+                <div class="legend-item"><div class="legend-color-box loss-3"></div><span class="legend-text">-1%</span></div>
+                <div class="legend-item"><div class="legend-color-box flat"></div><span class="legend-text">0%</span></div>
+                <div class="legend-item"><div class="legend-color-box gain-3"></div><span class="legend-text">+1%</span></div>
+                <div class="legend-item"><div class="legend-color-box gain-5"></div><span class="legend-text">> +3%</span></div>
             </footer>
         </div>
     `;
@@ -112,16 +116,12 @@ function generateTreemap(data, container, groupIntoSectors = true) {
     let itemsToLayout;
     if (groupIntoSectors) {
         const stocksBySector = groupDataBySector(data);
-        
-        // 【面积上限修改】开始
         const totalMarketCap = Object.values(stocksBySector).reduce((sum, sector) => sum + sector.total_market_cap, 0);
-        const capRatio = 0.15; // 设置上限为总市值的15% (即总面积的1/6.6)，可以调整这个值
+        const capRatio = 0.15;
         const capValue = totalMarketCap * capRatio;
-        // 【面积上限修改】结束
 
         itemsToLayout = Object.entries(stocksBySector).map(([sectorName, sectorData]) => ({
             name: sectorName,
-            // 【面积上限修改】应用上限
             value: Math.min(sectorData.total_market_cap, capValue),
             original_name: sectorData.original_name, 
             items: sectorData.stocks.map(s => ({ ...s, value: s.market_cap }))
@@ -130,77 +130,69 @@ function generateTreemap(data, container, groupIntoSectors = true) {
         itemsToLayout = data.map(s => ({ ...s, value: s.market_cap })).sort((a,b) => b.market_cap - a.market_cap);
     }
     
-    // 使用 Squarified Treemap 算法
-    squarify(itemsToLayout, 0, 0, totalWidth, totalHeight, container, groupIntoSectors);
+    squarify(itemsToLayout, { x: 0, y: 0, width: totalWidth, height: totalHeight }, container, groupIntoSectors);
 }
 
-// --- Squarified Treemap 核心算法 ---
-function squarify(items, x, y, width, height, parentEl, isSectorLevel) {
+function squarify(items, rect, parentEl, isSectorLevel) {
     if (!items.length) return;
 
     let row = [];
     let i = 0;
-    const totalValue = items.reduce((sum, item) => sum + item.value, 0);
-
-    // 确定是水平分割还是垂直分割
-    const isHorizontal = width >= height;
+    const isHorizontal = rect.width >= rect.height;
+    const side = isHorizontal ? rect.height : rect.width;
 
     while (i < items.length) {
-        const remainingItems = items.slice(i);
-        const item = remainingItems[0];
-        
-        // 计算当前行和添加新项目后的行的最差长宽比
-        const worstCurrent = worstAspectRatio(row, isHorizontal ? height : width, totalValue);
-        const worstWithNew = worstAspectRatio([...row, item], isHorizontal ? height : width, totalValue);
-
-        if (row.length > 0 && worstWithNew > worstCurrent) {
-            // 如果添加新项目会使长宽比变差，则先布局当前行
-            const rowValue = row.reduce((sum, item) => sum + item.value, 0);
-            const rowSize = (rowValue / totalValue) * (isHorizontal ? width : height);
-            
-            if (isHorizontal) {
-                layoutRow(row, x, y, rowSize, height, parentEl, isSectorLevel);
-                x += rowSize;
-                width -= rowSize;
-            } else {
-                layoutRow(row, x, y, width, rowSize, parentEl, isSectorLevel);
-                y += rowSize;
-                height -= rowSize;
-            }
-            break; // 结束当前循环，让外层函数用剩余项目再次调用 squarify
-        } else {
+        const item = items[i];
+        const newRow = [...row, item];
+        if (row.length === 0 || worst(row, side) >= worst(newRow, side)) {
             row.push(item);
             i++;
+        } else {
+            break;
         }
     }
 
-    // 布局剩余的行（或者第一行）
-    if (row.length > 0) {
-        layoutRow(row, x, y, width, height, parentEl, isSectorLevel);
+    const rowValue = row.reduce((sum, item) => sum + item.value, 0);
+    const totalValue = items.reduce((sum, item) => sum + item.value, 0);
+    const rowSize = (rowValue / totalValue) * (isHorizontal ? rect.width : rect.height);
+    
+    let rowRect;
+    if (isHorizontal) {
+        rowRect = { x: rect.x, y: rect.y, width: rowSize, height: rect.height };
+        rect.x += rowSize;
+        rect.width -= rowSize;
+    } else {
+        rowRect = { x: rect.x, y: rect.y, width: rect.width, height: rowSize };
+        rect.y += rowSize;
+        rect.height -= rowSize;
     }
+
+    layoutRow(row, rowRect, parentEl, isSectorLevel);
+    squarify(items.slice(i), rect, parentEl, isSectorLevel);
 }
 
-function layoutRow(row, x, y, width, height, parentEl, isSectorLevel) {
+function layoutRow(row, rect, parentEl, isSectorLevel) {
     const totalValue = row.reduce((sum, item) => sum + item.value, 0);
     if (totalValue <= 0) return;
 
-    const isHorizontal = width >= height;
-    
+    const isHorizontal = rect.width < rect.height;
+
     for (const item of row) {
-        const itemProportion = item.value / totalValue;
-        const itemWidth = isHorizontal ? width : width * itemProportion;
-        const itemHeight = isHorizontal ? height * itemProportion : height;
+        const proportion = item.value / totalValue;
+        const itemWidth = isHorizontal ? rect.width : rect.width * proportion;
+        const itemHeight = isHorizontal ? rect.height * proportion : rect.height;
 
         if (isSectorLevel) {
             const sectorEl = document.createElement('div');
             sectorEl.className = 'treemap-sector';
-            sectorEl.style.left = `${x}px`;
-            sectorEl.style.top = `${y}px`;
+            sectorEl.style.left = `${rect.x}px`;
+            sectorEl.style.top = `${rect.y}px`;
             sectorEl.style.width = `${itemWidth}px`;
             sectorEl.style.height = `${itemHeight}px`;
 
             const titleLink = document.createElement('a');
             titleLink.className = 'treemap-title-link';
+            // 【修正关键点】确保 original_name 在生成URL时被正确编码
             titleLink.href = `/?sector=${encodeURIComponent(item.original_name)}`;
             titleLink.onclick = (e) => navigate(e, titleLink.href);
             titleLink.innerHTML = `<h2 class="treemap-title">${item.name}</h2>`;
@@ -208,68 +200,52 @@ function layoutRow(row, x, y, width, height, parentEl, isSectorLevel) {
             parentEl.appendChild(sectorEl);
 
             const titleHeight = titleLink.offsetHeight > 0 ? titleLink.offsetHeight : 28;
-            // 递归调用 squarify 布局行业内部
-            squarify(item.items, 0, titleHeight, itemWidth - 4, itemHeight - titleHeight - 4, sectorEl, false);
+            squarify(item.items, { x: 0, y: titleHeight, width: itemWidth - 4, height: itemHeight - titleHeight - 4 }, sectorEl, false);
         } else {
             const stockEl = createStockElement(item, itemWidth, itemHeight);
-            stockEl.style.left = `${x}px`;
-            stockEl.style.top = `${y}px`;
+            stockEl.style.left = `${rect.x}px`;
+            stockEl.style.top = `${rect.y}px`;
             parentEl.appendChild(stockEl);
         }
 
         if (isHorizontal) {
-            y += itemHeight;
+            rect.y += itemHeight;
         } else {
-            x += itemWidth;
+            rect.x += itemWidth;
         }
     }
 }
 
-function worstAspectRatio(row, fixedSide, totalValue) {
+function worst(row, side) {
     if (!row.length) return Infinity;
-    const rowValue = row.reduce((sum, item) => sum + item.value, 0);
-    if (rowValue <= 0) return Infinity;
-
-    const rowArea = (rowValue / totalValue) * fixedSide * fixedSide;
-    let maxRatio = 0;
-    
+    const sum = row.reduce((s, item) => s + item.value, 0);
+    const s2 = sum * sum;
+    const side2 = side * side;
+    let max = 0;
     for (const item of row) {
-        const itemArea = (item.value / rowValue) * rowArea;
-        const ratio = Math.max(
-            (fixedSide * fixedSide * item.value) / (rowArea * rowValue),
-            (rowArea * rowValue) / (fixedSide * fixedSide * item.value)
-        );
-        if (ratio > maxRatio) maxRatio = ratio;
+        const r = Math.max((side2 * item.value) / s2, s2 / (side2 * item.value));
+        if (r > max) max = r;
     }
-    return maxRatio;
+    return max;
 }
-// --- Squarified Treemap 算法结束 ---
 
 function createStockElement(stock, width, height) {
     const stockLink = document.createElement('a');
     stockLink.className = 'treemap-stock';
     stockLink.href = `/?page=stock&symbol=${stock.ticker}`;
     stockLink.onclick = (e) => navigate(e, stockLink.href);
-    
     stockLink.style.width = `${width}px`;
     stockLink.style.height = `${height}px`;
 
     const stockDiv = document.createElement('div');
     const change = parseFloat(stock.change_percent);
     stockDiv.className = `stock ${getColorClass(change)}`;
-    
     const area = width * height;
-    if (area > 10000) stockDiv.classList.add('detail-xl');
-    else if (area > 4000) stockDiv.classList.add('detail-lg');
-    else if (area > 1500) stockDiv.classList.add('detail-md');
-    else if (area > 600) stockDiv.classList.add('detail-sm');
+    if (area > 10000) stockDiv.classList.add('detail-xl'); else if (area > 4000) stockDiv.classList.add('detail-lg');
+    else if (area > 1500) stockDiv.classList.add('detail-md'); else if (area > 600) stockDiv.classList.add('detail-sm');
     else stockDiv.classList.add('detail-xs');
     
-    stockDiv.innerHTML = `
-        <span class="stock-ticker">${stock.ticker}</span>
-        <span class="stock-name-zh">${stock.name_zh}</span>
-        <span class="stock-change">${change >= 0 ? '+' : ''}${change ? change.toFixed(2) : '0.00'}%</span>`;
-    
+    stockDiv.innerHTML = `<span class="stock-ticker">${stock.ticker}</span><span class="stock-name-zh">${stock.name_zh}</span><span class="stock-change">${change >= 0 ? '+' : ''}${change ? change.toFixed(2) : '0.00'}%</span>`;
     stockLink.appendChild(stockDiv);
     return stockLink;
 }
@@ -298,7 +274,7 @@ function getColorClass(change) {
 
 function navigate(event, path) {
     event.preventDefault();
-    if(window.location.pathname + window.location.search === path) return; // 避免重复导航
+    if(window.location.pathname + window.location.search === path) return;
     window.history.pushState({}, '', path);
     router();
 }
@@ -309,57 +285,22 @@ async function renderStockDetailPage(symbol) {
         const res = await fetch(`/api/stocks?ticker=${symbol}`);
         if (!res.ok) throw new Error('获取股票详情失败');
         const { profile, quote } = await res.json();
-
         const change = quote.dp || 0;
         const changeAmount = quote.d || 0;
         const changeClass = change >= 0 ? 'gain' : 'loss';
         const marketCapBillion = (profile.marketCapitalization / 1000).toFixed(2);
         const nameZh = profile.name_zh || ''; 
-
         document.title = `${nameZh} ${profile.name} (${profile.ticker}) - 股票详情`;
 
-        //【动画修改】在最外层包裹一个 .view-container 用于动画
-        appContainer.innerHTML = `
-            <div class="view-container">
-                <header class="header">
-                    <h1>${nameZh} ${profile.name} (${profile.ticker})</h1>
-                    <a href="javascript:history.back()" class="back-link" onclick="event.preventDefault(); window.history.back();">← 返回上一页</a>
-                </header>
-                <div class="stock-detail-page">
-                    <main class="main-content">
-                        <div class="card">
-                            <div class="stock-header">
-                                <div class="stock-identity">
-                                    <img src="${profile.logo}" alt="${profile.name} Logo" class="stock-logo" onerror="this.style.display='none'">
-                                    <div class="stock-name"><h1>${profile.name}</h1><p>${profile.exchange}: ${profile.ticker}</p></div>
-                                </div>
-                                <div class="stock-price-info">
-                                    <div class="current-price">${(quote.c || 0).toFixed(2)} <span class="price-change ${changeClass}">${change >= 0 ? '+' : ''}${changeAmount.toFixed(2)} (${change.toFixed(2)}%)</span></div>
-                                    <div class="market-status">数据来源: Finnhub</div>
-                                </div>
-                            </div>
-                        </div>
-                        <section class="chart-section">
-                           <div class="chart-svg-container" style="display:flex; align-items:center; justify-content:center; min-height: 400px; background-color: #f8f9fa;">
-                             <p style="color: #999;">K线图功能正在开发中...</p>
-                           </div>
-                         </section>
-                    </main>
-                    <aside class="right-sidebar">
-                        <div class="card"><h2 class="card-title">关于 ${nameZh}</h2><p class="company-info-text">${profile.description || '暂无公司简介。'}</p><div class="summary-item"><span class="label">市值</span><span class="value">${marketCapBillion}B USD</span></div><div class="summary-item"><span class="label">行业</span><span class="value">${profile.finnhubIndustry || 'N/A'}</span></div><div class="summary-item"><span class="label">官网</span><span class="value"><a href="${profile.weburl}" target="_blank" rel="noopener noreferrer">${profile.weburl ? profile.weburl.replace(/^(https?:\/\/)?(www\.)?/, '') : 'N/A'}</a></span></div></div>
-                    </aside>
-                </div>
-            </div>`;
+        appContainer.innerHTML = `<div class="view-container"><header class="header"><h1>${nameZh} ${profile.name} (${profile.ticker})</h1><a href="javascript:history.back()" class="back-link" onclick="event.preventDefault(); window.history.back();">← 返回上一页</a></header><div class="stock-detail-page"><main class="main-content"><div class="card"><div class="stock-header"><div class="stock-identity"><img src="${profile.logo}" alt="${profile.name} Logo" class="stock-logo" onerror="this.style.display='none'"><div class="stock-name"><h1>${profile.name}</h1><p>${profile.exchange}: ${profile.ticker}</p></div></div><div class="stock-price-info"><div class="current-price">${(quote.c || 0).toFixed(2)} <span class="price-change ${changeClass}">${change >= 0 ? '+' : ''}${changeAmount.toFixed(2)} (${change.toFixed(2)}%)</span></div><div class="market-status">数据来源: Finnhub</div></div></div></div><section class="chart-section"><div class="chart-svg-container" style="display:flex; align-items:center; justify-content:center; min-height: 400px; background-color: #f8f9fa;"><p style="color: #999;">K线图功能正在开发中...</p></div></section></main><aside class="right-sidebar"><div class="card"><h2 class="card-title">关于 ${nameZh}</h2><p class="company-info-text">${profile.description || '暂无公司简介。'}</p><div class="summary-item"><span class="label">市值</span><span class="value">${marketCapBillion}B USD</span></div><div class="summary-item"><span class="label">行业</span><span class="value">${profile.finnhubIndustry || 'N/A'}</span></div><div class="summary-item"><span class="label">官网</span><span class="value"><a href="${profile.weburl}" target="_blank" rel="noopener noreferrer">${profile.weburl ? profile.weburl.replace(/^(https?:\/\/)?(www\.)?/, '') : 'N/A'}</a></span></div></div></aside></div></div>`;
     } catch (error) {
         console.error('Error rendering stock detail page:', error);
         appContainer.innerHTML = `<div class="loading-indicator">${error.message}</div>`;
     }
 }
 
-// --- 程序入口与事件监听 ---
 window.addEventListener('popstate', router);
 document.addEventListener('DOMContentLoaded', router);
-
 let resizeTimeout;
 window.addEventListener('resize', () => {
     clearTimeout(resizeTimeout);
