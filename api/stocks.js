@@ -1,7 +1,7 @@
 import { Redis } from '@upstash/redis';
-import { fullTickerNameMap } from '../../lib/stock-data'; // 引入公共数据
+import { fullTickerNameMap } from '../../lib/stock-data';
 
-const CACHE_KEY_PREFIX = 'stock_heatmap_sp500_v3_deduped'; // 必须和 api/cron.js 中使用的前缀保持一致
+const CACHE_KEY_PREFIX = 'stock_heatmap_sp500_v_final_debug'; // 必须和 api/cron.js 中使用的前缀保持一致
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -15,7 +15,6 @@ export default async function handler(request, response) {
 
     try {
         if (ticker) {
-            // 获取个股详情的逻辑保持不变，因为它总是需要实时查询
             const data = await fetchSingleStockData(ticker);
             return response.status(200).json(data);
         }
@@ -28,17 +27,16 @@ export default async function handler(request, response) {
             cacheKey = `${CACHE_KEY_PREFIX}_homepage`;
         }
         
-        // 【核心改变】只从Redis读取数据
+        console.log(`Frontend request: Attempting to read from cache key: ${cacheKey}`);
         const cachedData = await redis.get(cacheKey);
 
         if (cachedData) {
-            console.log(`Serving data from cache for key: ${cacheKey}`);
-            // Vercel KV/Redis 返回的是一个对象，可以直接用，如果存的是字符串则需要 JSON.parse
+            console.log(`Frontend request: Cache HIT! Serving data for ${cacheKey}`);
+            // Redis/Vercel KV 返回的是一个对象，可以直接用，如果存的是字符串则需要 JSON.parse
             return response.status(200).json(typeof cachedData === 'string' ? JSON.parse(cachedData) : cachedData);
         } else {
-            // 如果缓存中没有数据，说明后台任务还没跑完，给前台一个友好的提示
-            console.warn(`Cache miss for key: ${cacheKey}. The cron job might not have run yet.`);
-            return response.status(404).json({ error: '数据正在后台预热中，请稍后再试。' });
+            console.error(`Frontend request: Cache MISS! No data found for ${cacheKey}. This indicates the cron job hasn't run successfully yet.`);
+            return response.status(404).json({ error: '数据正在后台生成中，请在几分钟后刷新页面重试。' });
         }
 
     } catch (error) {
@@ -47,7 +45,6 @@ export default async function handler(request, response) {
     }
 }
 
-// 个股详情页仍然需要实时获取
 async function fetchSingleStockData(ticker) {
     const apiKey = process.env.FINNHUB_API_KEY;
     if (!apiKey) throw new Error('FINNHUB_API_KEY is not configured.');
