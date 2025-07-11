@@ -2,7 +2,7 @@
 import { Redis } from '@upstash/redis';
 import { fullTickerNameMap } from '../../lib/stock-data';
 
-const CACHE_KEY_PREFIX = 'stock_heatmap_v_final_perfect'; // 与cron.js保持一致
+const CACHE_KEY_PREFIX = 'stock_heatmap_v_final_final_boss'; // 与cron.js保持一致
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -10,7 +10,7 @@ const redis = new Redis({
 });
 
 export default async function handler(request, response) {
-    const { searchParams } = new URL(request.url, `https://${request.headers.host}`);
+    const { searchParams } = new URL(request.url, `https://` + request.headers.host);
     const ticker = searchParams.get('ticker');
     const sector = searchParams.get('sector');
 
